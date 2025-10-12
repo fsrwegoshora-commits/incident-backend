@@ -1,0 +1,18 @@
+"id","name","name_sw","area_level_id","name_plural","name_plural_sw"
+1,Region,Mkoa,1,Regions,Mikoa
+2,Mega City Council,Halmashauri ya Jiji Kubwa,2,Mega City Councils,Halmashauri za Jiji Kubwa
+3,District,Wilaya,3,Districts,Wilaya
+4,City Council,Halmashauri ya Jiji,4,City Councils,Halmashauri za Jiji
+5,Municipal Council,Halmashauri ya Manispaa,4,Municipal Councils,Halmashauri za Manispaa
+6,Town Council,Halmashauri ya Mji,4,Town Councils,Halmashauri za Mji
+7,District Council,Halmashauri ya Wilaya,4,District Councils,Halmashauri za Wilaya
+8,Special area - conservation,Eneo maalum - hifadhi,5,Special areas - conservation,Maeneo maalum - hifadhi
+9,Special area - investment,Eneo maalum - uwekezaji,5,Special areas - investment,Maeneo maalum - uwekezaji
+10,Special area - other,Eneo maalum - nyingine,5,Special areas - other,Maeneo maalum - nyingine
+11,Division,Tarafa,6,Divisions,Tarafa
+12,Township authority,Mamlaka ya Mji Mdogo,7,Township authorities,Mamlaka za Mji Mdogo
+13,Ward,Kata,8,Wards,Kata
+14,Mtaa,Mtaa,9,Mitaa,Mitaa
+15,Village,Kijiji,9,Villages,Vijiji
+16,Kitongoji,Kitongonji,10,Vitongoji,Vitongonji
+0,Country,Nchi,0,Countries,Nchi

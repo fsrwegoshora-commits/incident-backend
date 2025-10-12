@@ -1,0 +1,12 @@
+name,name_sw,id,level
+Region,Mkoa,1,Region
+Mega City Council,Halmashauri la Jiji Kubwa,2,Council
+District,Wilaya,3,District
+Council,Halmashauri,4,Council
+Special Area,Eneo Maalum,5,Area
+Division,Tarafa,6,Division
+Township Authority,Mamlaka ya Mji Mdogo,7,Town
+Ward,Kata,8,Ward
+Village/Mtaa,Kijiji/Mtaa,9,Street
+Kitongoji,Kitongoji,10,Street
+Country,Nchi,0,Country

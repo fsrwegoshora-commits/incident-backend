@@ -1,0 +1,8 @@
+input PageableParamInput {
+    sortBy: String
+    sortDirection: String
+    size: Int
+    page: Int
+    searchParam: String
+    isActive: Boolean
+}
