@@ -5,6 +5,8 @@ import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.security.JwtAuthInterceptor;
 import com.smartincident.incidentbackend.authotp.service.UserService;
 import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
+import com.smartincident.incidentbackend.police.repository.PoliceOfficerRepository;
 
 public class LoggedUser {
 
@@ -47,6 +49,19 @@ public class LoggedUser {
 
     public static boolean isStationAdmin() {
         return getRole() == Role.STATION_ADMIN;
+    }
+    public static String getOfficerUid() {
+        User user = get();
+        if (user == null) {
+            return null;
+        }
+        try {
+            PoliceOfficerRepository officerRepository = SpringContext.getBean(PoliceOfficerRepository.class);
+            PoliceOfficer officer = officerRepository.findByUserAccount(user);
+            return officer != null ? officer.getUid() : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
 

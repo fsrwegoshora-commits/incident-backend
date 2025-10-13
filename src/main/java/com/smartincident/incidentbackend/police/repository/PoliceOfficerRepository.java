@@ -32,4 +32,6 @@ public interface PoliceOfficerRepository extends JpaRepository<PoliceOfficer,Lon
     List<PoliceOfficer> findByIsActiveTrue();
 
     List<PoliceOfficer> findByStationUidAndIsActiveTrue(String stationUid);
+
+    PoliceOfficer findByUserAccount(User user);
 }
