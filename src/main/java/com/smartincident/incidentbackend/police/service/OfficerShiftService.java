@@ -3,12 +3,11 @@ package com.smartincident.incidentbackend.police.service;
 import com.smartincident.incidentbackend.police.dto.OfficerShiftDto;
 import com.smartincident.incidentbackend.police.entity.OfficerShift;
 import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
+import com.smartincident.incidentbackend.police.entity.PoliceStation;
 import com.smartincident.incidentbackend.police.repository.OfficerShiftRepository;
 import com.smartincident.incidentbackend.police.repository.PoliceOfficerRepository;
-import com.smartincident.incidentbackend.utils.PageableParam;
-import com.smartincident.incidentbackend.utils.Response;
-import com.smartincident.incidentbackend.utils.ResponsePage;
-import com.smartincident.incidentbackend.utils.Utils;
+import com.smartincident.incidentbackend.police.repository.PoliceStationRepository;
+import com.smartincident.incidentbackend.utils.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,6 +16,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -24,6 +24,7 @@ import java.util.Optional;
 public class OfficerShiftService {
     private final OfficerShiftRepository officerShiftRepository;
     private final PoliceOfficerRepository policeOfficerRepository;
+    private final PoliceStationRepository policeStationRepository;
 
     public Response<OfficerShift> saveShift(OfficerShiftDto dto) {
         if (dto == null) return Response.error("Shift DTO cannot be null");
@@ -195,6 +196,130 @@ public class OfficerShiftService {
 
     public ResponsePage<OfficerShift> getShiftsByPoliceOfficer(PageableParam pageableParam, String policeOfficerUid) {
         return new ResponsePage<>(officerShiftRepository.getShiftsByPoliceOfficer(pageableParam.getPageable(true), pageableParam.getIsActive(), pageableParam.key(), policeOfficerUid));
+    }
+    public Response<OfficerShift> getCurrentOfficerOnDuty(String stationUid) {
+        log.info("🔍 Getting current officer on duty for station: {}", stationUid);
+
+        if (stationUid == null || stationUid.trim().isEmpty()) {
+            return Response.error("Station UID is required");
+        }
+
+        // Verify station exists
+        Optional<PoliceStation> stationOpt = policeStationRepository.findByUid(stationUid);
+        if (!stationOpt.isPresent()) {
+            return Response.error("Police station not found");
+        }
+
+        try {
+            LocalDate today = LocalDate.now();
+            LocalTime currentTime = LocalTime.now();
+
+            log.info("Searching for shift on date: {} at time: {}", today, currentTime);
+
+            // Find shift for today at this station
+            List<OfficerShift> todayShifts = officerShiftRepository.findByStationAndDate(stationUid, today);
+            log.info("Found {} shifts for today", todayShifts.size());
+
+            // Filter for current time and on-duty officers
+            Optional<OfficerShift> currentShift = todayShifts.stream()
+                    .filter(shift -> {
+                        // Skip OFF shifts
+                        if ("OFF".equalsIgnoreCase(String.valueOf(shift.getShiftType())))
+                            return false;
+
+                        // Skip excused shifts
+                        if (shift.getIsExcused() != null && shift.getIsExcused()) {
+                            return false;
+                        }
+
+                        // Check if current time is within shift hours
+                        LocalTime startTime = shift.getStartTime();
+                        LocalTime endTime = shift.getEndTime();
+
+                        if (startTime == null || endTime == null) {
+                            return false;
+                        }
+
+                        // Check if officer is on duty
+                        PoliceOfficer officer = shift.getOfficer();
+                        if (officer == null ) {
+                            return false;
+                        }
+
+                        // Handle shifts that cross midnight
+                        if (endTime.isBefore(startTime)) {
+                            return !currentTime.isBefore(startTime) || !currentTime.isAfter(endTime);
+                        } else {
+                            return !currentTime.isBefore(startTime) && !currentTime.isAfter(endTime);
+                        }
+                    })
+                    .findFirst();
+
+            if (currentShift.isPresent()) {
+                OfficerShift shift = currentShift.get();
+                log.info("Found officer on duty: {} ({})",
+                        shift.getOfficer().getUserAccount().getName(),
+                        shift.getShiftType()
+                );
+                return Response.success(shift);
+            }
+
+            log.warn(" No officer currently on duty at this station");
+            return Response.error("No officer currently on duty at this station");
+
+        } catch (Exception e) {
+            log.error("Error finding current officer on duty: {}", e.getMessage());
+            return Response.error("Failed to find current officer: " + e.getMessage());
+        }
+    }
+
+    public ResponseList<OfficerShift> getAllOfficersOnDutyNow(String stationUid) {
+        log.info("Getting all officers on duty now");
+
+        try {
+            LocalDate today = LocalDate.now();
+            LocalTime currentTime = LocalTime.now();
+
+            List<OfficerShift> todayShifts;
+
+            if (stationUid != null && !stationUid.trim().isEmpty()) {
+                todayShifts = officerShiftRepository.findByStationAndDate(stationUid, today);
+            } else {
+                // Get all shifts for today
+                todayShifts = officerShiftRepository.findByDate(today);
+            }
+
+            // Filter for officers currently on duty
+            List<OfficerShift> onDutyShifts = todayShifts.stream()
+                    .filter(shift -> {
+                        if ("OFF".equalsIgnoreCase(String.valueOf(shift.getShiftType()))) return false;
+                        if (shift.getIsExcused() != null && shift.getIsExcused()) return false;
+
+                        LocalTime startTime = shift.getStartTime();
+                        LocalTime endTime = shift.getEndTime();
+                        if (startTime == null || endTime == null) return false;
+
+                        PoliceOfficer officer = shift.getOfficer();
+                        if (officer == null) {
+                            return false;
+                        }
+
+                        // Check time range
+                        if (endTime.isBefore(startTime)) {
+                            return !currentTime.isBefore(startTime) || !currentTime.isAfter(endTime);
+                        } else {
+                            return !currentTime.isBefore(startTime) && !currentTime.isAfter(endTime);
+                        }
+                    })
+                    .collect(Collectors.toList());
+
+            log.info(" Found {} officers currently on duty", onDutyShifts.size());
+            return new ResponseList<>(onDutyShifts);
+
+        } catch (Exception e) {
+            log.error(" Error finding officers on duty: {}", e.getMessage());
+            return new ResponseList<>("Failed to find officers on duty: " + e.getMessage());
+        }
     }
 }
 

@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -32,4 +33,16 @@ public interface OfficerShiftRepository extends JpaRepository<OfficerShift,Long>
     List<OfficerShift> findByOfficerUidAndShiftDate(String newOfficerUid, LocalDate shiftDate);
 
     Optional<OfficerShift> findByOfficerUidAndShiftDateAndStartTimeBeforeAndEndTimeAfter(String uid, LocalDate today, LocalTime now, LocalTime now1);
+
+
+    @Query("SELECT s FROM OfficerShift s " +
+            "WHERE s.officer.station.uid = :stationUid " +
+            "AND s.shiftDate = :date " +
+            "AND s.isDeleted = false")
+    List<OfficerShift> findByStationAndDate(@Param("stationUid") String stationUid, @Param("date") LocalDate date);
+
+    @Query("SELECT s FROM OfficerShift s " +
+            "WHERE s.shiftDate = :date " +
+            "AND s.isDeleted = false")
+    List<OfficerShift> findByDate(@Param("date") LocalDate date);
 }

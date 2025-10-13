@@ -8,6 +8,7 @@ import com.smartincident.incidentbackend.police.entity.OfficerShift;
 import com.smartincident.incidentbackend.police.service.OfficerShiftService;
 import com.smartincident.incidentbackend.utils.PageableParam;
 import com.smartincident.incidentbackend.utils.Response;
+import com.smartincident.incidentbackend.utils.ResponseList;
 import com.smartincident.incidentbackend.utils.ResponsePage;
 import io.leangen.graphql.annotations.GraphQLArgument;
 import io.leangen.graphql.annotations.GraphQLMutation;
@@ -72,5 +73,19 @@ public class OfficerShiftController {
     @GraphQLQuery(name = "getShiftsByPoliceOfficer", description = "Gets a page of Officer Shift")
     public ResponsePage<OfficerShift> getShiftsByPoliceOfficer(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam, @GraphQLArgument(name = "policeOfficerUid") String policeOfficerUid) {
         return officerShiftService.getShiftsByPoliceOfficer(pageableParam != null ? pageableParam : new PageableParam(), policeOfficerUid);
+    }
+
+    @Authenticated
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.CITIZEN, Role.POLICE_OFFICER})
+    @GraphQLQuery(name = "getCurrentOfficerOnDuty", description = "Gets the officer currently on duty at a station")
+    public Response<OfficerShift> getCurrentOfficerOnDuty(@GraphQLArgument(name = "stationUid") String stationUid) {
+        return officerShiftService.getCurrentOfficerOnDuty(stationUid);
+    }
+
+    @Authenticated
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @GraphQLQuery(name = "getAllOfficersOnDutyNow", description = "Gets all officers currently on duty")
+    public ResponseList<OfficerShift> getAllOfficersOnDutyNow(@GraphQLArgument(name = "stationUid") String stationUid) {
+        return officerShiftService.getAllOfficersOnDutyNow(stationUid);
     }
 }
