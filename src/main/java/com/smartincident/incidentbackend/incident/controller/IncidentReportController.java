@@ -27,7 +27,7 @@ public class IncidentReportController {
     private final IncidentReportService incidentService;
 
     @Authenticated
-    @AuthorizedRole({Role.CITIZEN})
+    @AuthorizedRole({Role.CITIZEN,Role.STATION_ADMIN,Role.ROOT})
     @GraphQLMutation(name = "createIncident", description = "Citizen reports a new incident")
     public Response<IncidentReport> createIncident(@GraphQLArgument(name = "incidentDto") IncidentReportDto dto) {
         log.info("Creating incident: {}", dto.getTitle());

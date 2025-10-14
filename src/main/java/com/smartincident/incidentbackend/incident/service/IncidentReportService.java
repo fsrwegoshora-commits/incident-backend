@@ -10,14 +10,11 @@ import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
 import com.smartincident.incidentbackend.police.repository.PoliceStationRepository;
 import com.smartincident.incidentbackend.police.repository.PoliceOfficerRepository;
 import com.smartincident.incidentbackend.enums.IncidentStatus;
-import com.smartincident.incidentbackend.enums.IncidentType;
-import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.utils.*;
 import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -70,9 +67,18 @@ public class IncidentReportService {
         }
         User reporter = reporterOpt.get();
 
-        // Verify reporter is a citizen
-        if (reporter.getRole() != Role.CITIZEN) {
-            return Response.error("Only citizens can report incidents");
+        PoliceOfficer officer =null;
+        if (dto.getAssignedOfficerUid() != null && !dto.getAssignedOfficerUid().isEmpty()) {
+            Optional<PoliceOfficer> officerOpt = officerRepository.findByUid(dto.getAssignedOfficerUid());
+            if (!officerOpt.isPresent()) {
+                return Response.error("Assigned officer not found");
+            }
+            officer = officerOpt.get();
+
+            if (!officer.getStation().getUid().equals(dto.getAssignedStationUid()))
+                return Response.error("Officer does not belong to the selected station");
+
+            log.info("Assigning incident to officer: {}", officer.getBadgeNumber());
         }
 
         // Get assigned station
@@ -97,6 +103,9 @@ public class IncidentReportService {
         incident.setStatus(IncidentStatus.PENDING);
         incident.setReportedBy(reporter);
         incident.setAssignedStation(station);
+        if (officer != null) {
+            incident.setAssignedOfficer(officer);
+        }
         incident.setReportedAt(LocalDateTime.now());
 
         try {
