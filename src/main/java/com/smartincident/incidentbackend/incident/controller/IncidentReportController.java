@@ -67,12 +67,12 @@ public class IncidentReportController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.CITIZEN})
+    @AuthorizedRole({Role.CITIZEN,Role.POLICE_OFFICER,Role.STATION_ADMIN,Role.ROOT})
     @GraphQLQuery(name = "getMyIncidents", description = "Get all incidents reported by current user")
     public ResponsePage<IncidentReport> getMyIncidents(
             @GraphQLArgument(name = "pageableParam") PageableParam pageableParam
     ) {
-        log.info("📋 Getting my incidents");
+        log.info(" Getting my incidents");
         return incidentService.getMyIncidents(pageableParam);
     }
 
@@ -89,7 +89,7 @@ public class IncidentReportController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.POLICE_OFFICER})
+    @AuthorizedRole({Role.POLICE_OFFICER,Role.STATION_ADMIN,Role.ROOT})
     @GraphQLQuery(name = "getOfficerIncidents", description = "Get incidents assigned to current officer")
     public ResponsePage<IncidentReport> getOfficerIncidents(
             @GraphQLArgument(name = "pageableParam") PageableParam pageableParam,

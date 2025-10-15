@@ -237,10 +237,7 @@ public class IncidentReportService {
         return new ResponsePage<>(incidents);
     }
 
-    public ResponsePage<IncidentReport> getStationIncidents(
-            PageableParam pageableParam,
-            IncidentStatus status
-    ) {
+    public ResponsePage<IncidentReport> getStationIncidents(PageableParam pageableParam, IncidentStatus status) {
         String stationUid = LoggedUser.getStationUid();
         if (stationUid == null) {
             return new ResponsePage<>("Station not found");
@@ -267,6 +264,7 @@ public class IncidentReportService {
                 officerUid,
                 status,
                 pageableParam.getIsActive(),
+                pageableParam.key(),
                 pageableParam.getPageable(true)
         );
 

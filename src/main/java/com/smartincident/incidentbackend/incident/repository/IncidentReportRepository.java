@@ -50,12 +50,15 @@ public interface IncidentReportRepository extends JpaRepository<IncidentReport, 
     // Find by assigned officer
     @Query("SELECT i FROM IncidentReport i WHERE i.assignedOfficer.uid = :officerUid " +
             "AND (:isActive IS NULL OR i.isActive = :isActive) " +
+            "AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :key, '%')) " +
+            "OR LOWER(i.description) LIKE LOWER(CONCAT('%', :key, '%'))) " +
             "AND (:status IS NULL OR i.status = :status) " +
             "ORDER BY i.reportedAt DESC")
     Page<IncidentReport> findByOfficer(
             @Param("officerUid") String officerUid,
             @Param("status") IncidentStatus status,
             @Param("isActive") Boolean isActive,
+            @Param("key") String key,
             Pageable pageable
     );
 
