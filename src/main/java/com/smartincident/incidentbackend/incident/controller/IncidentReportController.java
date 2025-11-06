@@ -39,7 +39,7 @@ public class IncidentReportController {
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.POLICE_OFFICER})
     @GraphQLMutation(name = "updateIncident", description = "Update incident details or status")
     public Response<IncidentReport> updateIncident(@GraphQLArgument(name = "incidentDto") IncidentReportDto dto) {
-        log.info("✏ Updating incident: {}", dto.getUid());
+        log.info(" Updating incident: {}", dto.getUid());
         return incidentService.updateIncident(dto);
     }
 
@@ -48,7 +48,7 @@ public class IncidentReportController {
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
     @GraphQLMutation(name = "assignOfficerToIncident", description = "Assign officer to handle incident")
     public Response<IncidentReport> assignOfficer(@GraphQLArgument(name = "incidentUid") String incidentUid, @GraphQLArgument(name = "officerUid") String officerUid) {
-        log.info("👮 Assigning officer to incident");
+        log.info(" Assigning officer to incident");
         return incidentService.assignOfficer(incidentUid, officerUid);
     }
 
@@ -69,9 +69,7 @@ public class IncidentReportController {
     @Authenticated
     @AuthorizedRole({Role.CITIZEN,Role.POLICE_OFFICER,Role.STATION_ADMIN,Role.ROOT})
     @GraphQLQuery(name = "getMyIncidents", description = "Get all incidents reported by current user")
-    public ResponsePage<IncidentReport> getMyIncidents(
-            @GraphQLArgument(name = "pageableParam") PageableParam pageableParam
-    ) {
+    public ResponsePage<IncidentReport> getMyIncidents(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam) {
         log.info(" Getting my incidents");
         return incidentService.getMyIncidents(pageableParam);
     }
@@ -80,11 +78,8 @@ public class IncidentReportController {
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
     @GraphQLQuery(name = "getStationIncidents", description = "Get all incidents for a police station")
-    public ResponsePage<IncidentReport> getStationIncidents(
-            @GraphQLArgument(name = "pageableParam") PageableParam pageableParam,
-            @GraphQLArgument(name = "status") IncidentStatus status
-    ) {
-        log.info("🏢 Getting station incidents");
+    public ResponsePage<IncidentReport> getStationIncidents(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam, @GraphQLArgument(name = "status") IncidentStatus status) {
+        log.info(" Getting station incidents");
         return incidentService.getStationIncidents(pageableParam, status);
     }
 
@@ -92,7 +87,7 @@ public class IncidentReportController {
     @AuthorizedRole({Role.POLICE_OFFICER,Role.STATION_ADMIN,Role.ROOT})
     @GraphQLQuery(name = "getOfficerIncidents", description = "Get incidents assigned to current officer")
     public ResponsePage<IncidentReport> getOfficerIncidents(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam, @GraphQLArgument(name = "status") IncidentStatus status) {
-        log.info("👮 Getting officer incidents");
+        log.info(" Getting officer incidents");
         return incidentService.getOfficerIncidents(pageableParam, status);
     }
 
@@ -112,8 +107,7 @@ public class IncidentReportController {
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
     @GraphQLQuery(name = "getIncidentStats", description = "Get incident statistics for station")
-    public Response<IncidentReportService.IncidentStats> getIncidentStats(
-            @GraphQLArgument(name = "stationUid") String stationUid){
+    public Response<IncidentReportService.IncidentStats> getIncidentStats(@GraphQLArgument(name = "stationUid") String stationUid){
         return incidentService.getStationStats(stationUid);
     }
 }
