@@ -50,7 +50,7 @@ public class IncidentReport extends BaseEntity {
     private String videoUrl;
 
     @Column(nullable = false)
-    private boolean isLiveCallRequested = false;
+    private Boolean isLiveCallRequested = false;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

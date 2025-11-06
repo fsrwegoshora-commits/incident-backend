@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class IncidentReportDto {
 
-    private String uid;  // For updates
+    private String uid;
 
     // Basic Info
     private String title;
@@ -32,12 +32,12 @@ public class IncidentReportDto {
 
     // Status
     private IncidentStatus status;
-    private boolean isLiveCallRequested;
+    private Boolean isLiveCallRequested;
 
     // Relations
-    private String reportedByUid;  // User who reported
-    private String assignedStationUid;  // Police station
-    private String assignedOfficerUid;  // Assigned officer (optional)
+    private String reportedByUid;
+    private String assignedStationUid;
+    private String assignedOfficerUid;
 
     // Timestamps
     private LocalDateTime reportedAt;

@@ -99,7 +99,7 @@ public class IncidentReportService {
         incident.setImageUrl(dto.getImageUrl());
         incident.setAudioUrl(dto.getAudioUrl());
         incident.setVideoUrl(dto.getVideoUrl());
-        incident.setLiveCallRequested(dto.isLiveCallRequested());
+        incident.setIsLiveCallRequested(dto.getIsLiveCallRequested());
         incident.setStatus(IncidentStatus.PENDING);
         incident.setReportedBy(reporter);
         incident.setAssignedStation(station);
