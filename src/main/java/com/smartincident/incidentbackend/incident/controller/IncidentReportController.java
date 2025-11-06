@@ -91,10 +91,7 @@ public class IncidentReportController {
     @Authenticated
     @AuthorizedRole({Role.POLICE_OFFICER,Role.STATION_ADMIN,Role.ROOT})
     @GraphQLQuery(name = "getOfficerIncidents", description = "Get incidents assigned to current officer")
-    public ResponsePage<IncidentReport> getOfficerIncidents(
-            @GraphQLArgument(name = "pageableParam") PageableParam pageableParam,
-            @GraphQLArgument(name = "status") IncidentStatus status
-    ) {
+    public ResponsePage<IncidentReport> getOfficerIncidents(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam, @GraphQLArgument(name = "status") IncidentStatus status) {
         log.info("👮 Getting officer incidents");
         return incidentService.getOfficerIncidents(pageableParam, status);
     }
