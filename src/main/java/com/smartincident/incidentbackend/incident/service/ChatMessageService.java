@@ -35,12 +35,15 @@ public class ChatMessageService {
     public Response<ChatMessage> sendMessage(ChatMessageDto dto) {
         log.info(" Sending message for incident: {}", dto.getIncidentUid());
 
+        // Validation
         if (dto.getIncidentUid() == null || dto.getIncidentUid().trim().isEmpty()) {
             return Response.error("Incident UID is required");
         }
 
-        if (dto.getMessage() == null || dto.getMessage().trim().isEmpty()) {
-            return Response.error("Message cannot be empty");
+        // Enhanced validation based on message type
+        ValidationResult validationResult = validateMessage(dto);
+        if (!validationResult.isValid()) {
+            return Response.error(validationResult.getErrorMessage());
         }
 
         String senderUid = LoggedUser.getUid();
@@ -62,53 +65,150 @@ public class ChatMessageService {
         IncidentReport incident = incidentOpt.get();
 
         // Verify sender has access to this incident
-        boolean hasAccess = false;
-
-        // Reporter can chat
-        if (incident.getReportedBy().getUid().equals(senderUid)) {
-            hasAccess = true;
-        }
-
-        // Assigned officer can chat
-        if (incident.getAssignedOfficer() != null &&
-                incident.getAssignedOfficer().getUserAccount().getUid().equals(senderUid)) {
-            hasAccess = true;
-        }
-
-        // Station admin can chat
-        if (sender.getRole().name().equals("STATION_ADMIN") ||
-                sender.getRole().name().equals("ROOT")) {
-            if (sender.getStation().getUid() != null &&
-                    sender.getStation().getUid().equals(incident.getAssignedStation().getUid())) {
-                hasAccess = true;
-            }
-        }
-
-        if (!hasAccess) {
+        if (!verifyUserAccess(incident, sender)) {
             return Response.error("You don't have access to this incident chat");
         }
 
-        // Create message
-        ChatMessage message = new ChatMessage();
-        message.setSender(sender);
-        message.setRelatedIncident(incident);
-        message.setMessage(dto.getMessage());
-        message.setMessageType(dto.getMessageType() != null ? dto.getMessageType() : MessageType.TEXT);
-        message.setSentAt(LocalDateTime.now());
-
+        // Create and save message
         try {
+            ChatMessage message = createChatMessageFromDto(dto, sender, incident);
             message = chatMessageRepository.save(message);
-            log.info(" Message sent successfully: {}", message.getUid());
 
-            // TODO: Send real-time notification to other party
-            // notificationService.notifyNewMessage(incident, message);
+            log.info("Message sent successfully: {}", message.getUid());
+            return Response.success(message);
 
-            return new Response<>(message+ "Message sent successfully");
         } catch (Exception e) {
             log.error(" Failed to send message: {}", e.getMessage());
             return Response.error("Failed to send message: " + Utils.getExceptionMessage(e));
         }
     }
+
+    // Helper method for validation
+    private ValidationResult validateMessage(ChatMessageDto dto) {
+        MessageType messageType = dto.getMessageType() != null ? dto.getMessageType() : MessageType.TEXT;
+
+        switch (messageType) {
+            case TEXT:
+                if (dto.getMessage() == null || dto.getMessage().trim().isEmpty()) {
+                    return ValidationResult.invalid("Message cannot be empty for TEXT type");
+                }
+                break;
+
+            case IMAGE:
+            case AUDIO:
+            case VIDEO:
+                if (dto.getMediaUrl() == null || dto.getMediaUrl().trim().isEmpty()) {
+                    return ValidationResult.invalid("Media URL is required for " + messageType + " messages");
+                }
+                break;
+
+            default:
+                // SYSTEM messages might not need content validation
+                break;
+        }
+
+        return ValidationResult.valid();
+    }
+
+    // Helper method to create ChatMessage from DTO
+    private ChatMessage createChatMessageFromDto(ChatMessageDto dto, User sender, IncidentReport incident) {
+        ChatMessage message = new ChatMessage();
+        message.setSender(sender);
+        message.setRelatedIncident(incident);
+
+        // Set message content based on type
+        if (dto.getMessageType() == MessageType.TEXT) {
+            message.setMessage(dto.getMessage());
+        } else {
+            // For media messages, use filename or a descriptive text
+            String displayMessage = dto.getMessage() != null ?
+                    dto.getMessage() :
+                    (dto.getMediaFileName() != null ?
+                            dto.getMediaFileName() :
+                            getDefaultMessageForType(dto.getMessageType()));
+            message.setMessage(displayMessage);
+        }
+
+        message.setMessageType(dto.getMessageType() != null ? dto.getMessageType() : MessageType.TEXT);
+        message.setSentAt(dto.getSentAt() != null ? dto.getSentAt() : LocalDateTime.now());
+
+        // Set media properties
+        message.setMediaUrl(dto.getMediaUrl());
+        message.setMediaFileName(dto.getMediaFileName());
+        message.setMediaFileSize(dto.getMediaFileSize());
+        message.setMediaDuration(dto.getMediaDuration());
+        message.setMediaThumbnailUrl(dto.getMediaThumbnailUrl());
+
+        return message;
+    }
+
+    private String getDefaultMessageForType(MessageType messageType) {
+        switch (messageType) {
+            case IMAGE: return "📷 Image";
+            case AUDIO: return "🎵 Audio";
+            case VIDEO: return "🎥 Video";
+            case SYSTEM: return "System Message";
+            default: return "Message";
+        }
+    }
+
+    // Access verification helper method
+    private boolean verifyUserAccess(IncidentReport incident, User sender) {
+        String senderUid = sender.getUid();
+
+        // Reporter can chat
+        if (incident.getReportedBy().getUid().equals(senderUid)) {
+            return true;
+        }
+
+        // Assigned officer can chat
+        if (incident.getAssignedOfficer() != null &&
+                incident.getAssignedOfficer().getUserAccount() != null &&
+                incident.getAssignedOfficer().getUserAccount().getUid().equals(senderUid)) {
+            return true;
+        }
+
+        // Station admin or root can chat
+        if (sender.getRole().name().equals("STATION_ADMIN") ||
+                sender.getRole().name().equals("ROOT")) {
+            if (sender.getStation() != null &&
+                    sender.getStation().getUid() != null &&
+                    incident.getAssignedStation() != null &&
+                    sender.getStation().getUid().equals(incident.getAssignedStation().getUid())) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Validation helper class
+    private static class ValidationResult {
+        private final boolean valid;
+        private final String errorMessage;
+
+        private ValidationResult(boolean valid, String errorMessage) {
+            this.valid = valid;
+            this.errorMessage = errorMessage;
+        }
+
+        public static ValidationResult valid() {
+            return new ValidationResult(true, null);
+        }
+
+        public static ValidationResult invalid(String errorMessage) {
+            return new ValidationResult(false, errorMessage);
+        }
+
+        public boolean isValid() {
+            return valid;
+        }
+
+        public String getErrorMessage() {
+            return errorMessage;
+        }
+    }
+
 
     public ResponsePage<ChatMessage> getIncidentMessages(String incidentUid, PageableParam pageableParam) {
         log.info("Getting messages for incident: {}", incidentUid);

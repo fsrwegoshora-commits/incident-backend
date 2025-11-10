@@ -1,5 +1,6 @@
 package com.smartincident.incidentbackend.incident.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.entity.BaseEntity;
 import com.smartincident.incidentbackend.enums.IncidentStatus;
@@ -75,5 +76,18 @@ public class IncidentReport extends BaseEntity {
     private LocalDateTime resolvedAt;
 
     @OneToMany(mappedBy = "relatedIncident", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
     private List<ChatMessage> chatMessages;
+
+    @Override
+    public String toString() {
+        return "IncidentReport{" +
+                "id=" + getId() +
+                ", uid='" + getUid() + '\'' +
+                ", title='" + title + '\'' +
+                ", type=" + type +
+                ", status=" + status +
+                // OMIT chatMessages, reportedBy, assignedStation, etc.
+                '}';
+    }
 }

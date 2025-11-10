@@ -14,12 +14,11 @@ import java.util.List;
 @Builder
 public class Response<T> implements Serializable {
 
-    @Builder.Default
+
     private ResponseStatus status = ResponseStatus.Success;
 
     private T data;
 
-    @Builder.Default
     private String message = ResponseStatus.Success.toString();
 
     @Builder.Default

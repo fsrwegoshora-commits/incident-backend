@@ -31,4 +31,33 @@ public class ChatMessage extends BaseEntity {
     @Column(nullable = false)
     private LocalDateTime sentAt = LocalDateTime.now();
 
+    private Boolean isRead = false;
+
+    @Column(name = "media_url")
+    private String mediaUrl;
+
+    @Column(name = "media_file_name")
+    private String mediaFileName;
+
+    @Column(name = "media_file_size")
+    private Long mediaFileSize;
+
+    @Column(name = "media_duration")
+    private Integer mediaDuration;
+
+    @Column(name = "media_thumbnail_url")
+    private String mediaThumbnailUrl;
+
+    @Override
+    public String toString() {
+        return "ChatMessage{" +
+                "id=" + getId() +
+                ", uid='" + getUid() + '\'' +
+                ", message='" + message + '\'' +
+                ", messageType=" + messageType +
+                ", sentAt=" + sentAt +
+                ", mediaUrl='" + mediaUrl + '\'' +
+                // OMIT sender and relatedIncident
+                '}';
+    }
 }

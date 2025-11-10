@@ -1,5 +1,6 @@
 package com.smartincident.incidentbackend.authotp.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.entity.BaseEntity;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
@@ -32,5 +33,17 @@ public class User extends BaseEntity {
 
     @ManyToOne
     @JoinColumn(name = "station_id")
+    @JsonIgnore
     private PoliceStation station;
+
+    @Override
+    public String toString() {
+        return "User{" +
+                "id=" + getId() +
+                ", uid='" + getUid() + '\'' +
+                ", name='" + name + '\'' +
+                ", phoneNumber='" + phoneNumber + '\'' +
+                // OMIT station
+                '}';
+    }
 }

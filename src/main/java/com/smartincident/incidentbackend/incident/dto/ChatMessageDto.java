@@ -18,4 +18,11 @@ public class ChatMessageDto {
     private String message;
     private MessageType messageType;
     private LocalDateTime sentAt;
+
+    // === NEW MEDIA FIELDS ===
+    private String mediaUrl;
+    private String mediaFileName;
+    private Long mediaFileSize;
+    private Integer mediaDuration;
+    private String mediaThumbnailUrl;
 }
