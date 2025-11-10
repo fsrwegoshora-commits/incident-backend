@@ -1,5 +1,6 @@
 package com.smartincident.incidentbackend.incident.service;
 
+import com.smartincident.incidentbackend.enums.IncidentStatus;
 import com.smartincident.incidentbackend.incident.dto.ChatMessageDto;
 import com.smartincident.incidentbackend.incident.entity.ChatMessage;
 import com.smartincident.incidentbackend.incident.entity.IncidentReport;
@@ -63,6 +64,9 @@ public class ChatMessageService {
             return Response.error("Incident not found");
         }
         IncidentReport incident = incidentOpt.get();
+
+        if(incident.getStatus()== IncidentStatus.RESOLVED)
+            return Response.error("incident in already resolved");
 
         // Verify sender has access to this incident
         if (!verifyUserAccess(incident, sender)) {
