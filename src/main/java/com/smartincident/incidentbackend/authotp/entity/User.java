@@ -36,6 +36,7 @@ public class User extends BaseEntity {
     @JsonIgnore
     private PoliceStation station;
 
+
     @Override
     public String toString() {
         return "User{" +

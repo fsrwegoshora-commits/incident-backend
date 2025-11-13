@@ -27,7 +27,6 @@ public class IncidentReportController {
     private final IncidentReportService incidentService;
 
     @Authenticated
-    @AuthorizedRole({Role.CITIZEN,Role.STATION_ADMIN,Role.ROOT})
     @GraphQLMutation(name = "createIncident", description = "Citizen reports a new incident")
     public Response<IncidentReport> createIncident(@GraphQLArgument(name = "incidentDto") IncidentReportDto dto) {
         log.info("Creating incident: {}", dto.getTitle());
@@ -67,7 +66,6 @@ public class IncidentReportController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.CITIZEN,Role.POLICE_OFFICER,Role.STATION_ADMIN,Role.ROOT})
     @GraphQLQuery(name = "getMyIncidents", description = "Get all incidents reported by current user")
     public ResponsePage<IncidentReport> getMyIncidents(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam) {
         log.info(" Getting my incidents");

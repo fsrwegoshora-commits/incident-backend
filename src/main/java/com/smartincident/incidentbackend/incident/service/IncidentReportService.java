@@ -1,10 +1,15 @@
 package com.smartincident.incidentbackend.incident.service;
 
+import com.smartincident.incidentbackend.enums.NotificationChannel;
+import com.smartincident.incidentbackend.enums.NotificationType;
+import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.incident.dto.IncidentReportDto;
 import com.smartincident.incidentbackend.incident.entity.IncidentReport;
 import com.smartincident.incidentbackend.incident.repository.IncidentReportRepository;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.repository.UserRepository;
+import com.smartincident.incidentbackend.notification.dto.NotificationDto;
+import com.smartincident.incidentbackend.notification.service.NotificationService;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
 import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
 import com.smartincident.incidentbackend.police.repository.PoliceStationRepository;
@@ -32,6 +37,7 @@ public class IncidentReportService {
     private final UserRepository userRepository;
     private final PoliceStationRepository stationRepository;
     private final PoliceOfficerRepository officerRepository;
+    private final NotificationService notificationService;
     // private final NotificationService notificationService;
 
     @Transactional
@@ -111,8 +117,7 @@ public class IncidentReportService {
         try {
             incident = incidentRepository.save(incident);
             log.info("✅ Incident created successfully: {}", incident.getUid());
-            // notificationService.notifyStationAdmins(station.getUid(), incident);
-
+            notifyIncidentCreation(incident);
             return new Response<>(incident);
         } catch (Exception e) {
             log.error("Failed to create incident: {}", e.getMessage());
@@ -198,8 +203,7 @@ public class IncidentReportService {
             incident = incidentRepository.save(incident);
             log.info("✅ Officer assigned successfully");
 
-            // TODO: Notify officer & reporter
-            // notificationService.notifyOfficerAssignment(officer, incident);
+            notifyOfficerAssignment(incident, officer);
 
             return new Response<>(incident+"Officer assigned successfully");
         } catch (Exception e) {
@@ -353,4 +357,31 @@ public class IncidentReportService {
         private Long resolved;
         private Long recentCount;
     }
+    private void notifyIncidentCreation(IncidentReport incident) {
+        NotificationDto notificationDto = new NotificationDto();
+        notificationDto.setTitle("New Incident Reported");
+        notificationDto.setMessage("A new incident has been reported: " + incident.getTitle());
+        notificationDto.setType(NotificationType.INCIDENT_REPORTED);
+        notificationDto.setChannels(List.of(NotificationChannel.IN_APP));
+        notificationDto.setRelatedEntityUid(incident.getUid());
+        notificationDto.setRelatedEntityType("INCIDENT");
+        notificationDto.setTargetRole(Role.STATION_ADMIN);
+        notificationDto.setTargetStationUid(incident.getAssignedStation().getUid());
+
+        notificationService.sendNotificationByRoleAndStation(notificationDto);
+    }
+
+    private void notifyOfficerAssignment(IncidentReport incident, PoliceOfficer officer) {
+        NotificationDto notificationDto = new NotificationDto();
+        notificationDto.setTitle("Incident Assigned To You");
+        notificationDto.setMessage("You have been assigned to incident: " + incident.getTitle());
+        notificationDto.setType(NotificationType.INCIDENT_ASSIGNED);
+        notificationDto.setChannels(List.of(NotificationChannel.IN_APP));
+        notificationDto.setRelatedEntityUid(incident.getUid());
+        notificationDto.setRelatedEntityType("INCIDENT");
+        notificationDto.setTargetUserUids(List.of(officer.getUserAccount().getUid(),incident.getReportedBy().getUid()));
+
+        notificationService.sendNotification(notificationDto);
+    }
+
 }

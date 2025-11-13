@@ -1,6 +1,8 @@
 package com.smartincident.incidentbackend.incident.service;
 
 import com.smartincident.incidentbackend.enums.IncidentStatus;
+import com.smartincident.incidentbackend.enums.NotificationChannel;
+import com.smartincident.incidentbackend.enums.NotificationType;
 import com.smartincident.incidentbackend.incident.dto.ChatMessageDto;
 import com.smartincident.incidentbackend.incident.entity.ChatMessage;
 import com.smartincident.incidentbackend.incident.entity.IncidentReport;
@@ -9,6 +11,8 @@ import com.smartincident.incidentbackend.incident.repository.IncidentReportRepos
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.enums.MessageType;
+import com.smartincident.incidentbackend.notification.dto.NotificationDto;
+import com.smartincident.incidentbackend.notification.service.NotificationService;
 import com.smartincident.incidentbackend.utils.*;
 import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,6 +35,7 @@ public class ChatMessageService {
     private final ChatMessageRepository chatMessageRepository;
     private final IncidentReportRepository incidentRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
     // private final NotificationService notificationService;  // For real-time notifications
 
     @Transactional
@@ -77,6 +83,7 @@ public class ChatMessageService {
         try {
             ChatMessage message = createChatMessageFromDto(dto, sender, incident);
             message = chatMessageRepository.save(message);
+            notifyChatMessage(message,incident);
 
             log.info("Message sent successfully: {}", message.getUid());
             return Response.success(message);
@@ -382,10 +389,10 @@ public class ChatMessageService {
 
         try {
             chatMessage = chatMessageRepository.save(chatMessage);
-            log.info("✅ System message sent successfully");
+            log.info("System message sent successfully");
             return Response.success(chatMessage);
         } catch (Exception e) {
-            log.error("Failed to send system message: {}", e.getMessage());
+            e.printStackTrace();
             return Response.error("Failed to send system message: " + Utils.getExceptionMessage(e));
         }
     }
@@ -410,5 +417,41 @@ public class ChatMessageService {
         // Query messages where isRead = false and recipient = current user
 
         return Response.success(0L);
+    }
+
+    private void notifyChatMessage(ChatMessage message, IncidentReport incident) {
+        List<String> recipientUids = getChatRecipients(incident, message.getSender());
+
+        if (!recipientUids.isEmpty()) {
+            NotificationDto notificationDto = new NotificationDto();
+            notificationDto.setTitle("New Message in Incident");
+            notificationDto.setMessage(message.getSender().getName() + ": " +
+                    (message.getMessage() != null ? message.getMessage() : "Sent a media file"));
+            notificationDto.setType(NotificationType.CHAT_MESSAGE);
+            notificationDto.setChannels(List.of(NotificationChannel.IN_APP));
+            notificationDto.setRelatedEntityUid(incident.getUid());
+            notificationDto.setRelatedEntityType("INCIDENT");
+            notificationDto.setTargetUserUids(recipientUids);
+
+            notificationService.sendNotification(notificationDto);
+        }
+    }
+
+    private List<String> getChatRecipients(IncidentReport incident, User sender) {
+        List<String> recipients = new ArrayList<>();
+
+        // Add reporter if not the sender
+        if (!incident.getReportedBy().getUid().equals(sender.getUid())) {
+            recipients.add(incident.getReportedBy().getUid());
+        }
+
+        // Add assigned officer if exists and not the sender
+        if (incident.getAssignedOfficer() != null &&
+                incident.getAssignedOfficer().getUserAccount() != null &&
+                !incident.getAssignedOfficer().getUserAccount().getUid().equals(sender.getUid())) {
+            recipients.add(incident.getAssignedOfficer().getUserAccount().getUid());
+        }
+
+        return recipients;
     }
 }

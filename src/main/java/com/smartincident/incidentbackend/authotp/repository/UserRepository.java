@@ -2,6 +2,7 @@ package com.smartincident.incidentbackend.authotp.repository;
 
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.enums.Role;
+import io.lettuce.core.dynamic.annotation.Param;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -34,4 +35,9 @@ public interface UserRepository extends JpaRepository<User,Long> {
     boolean existsByPhoneNumberAndIsActiveTrue(String cleanedPhoneNumber);
 
     Optional<User> findByPhoneNumberAndIsActiveTrue(String phoneNumber);
+
+    @Query("SELECT u FROM User u WHERE u.role = :role AND u.station.uid = :stationUid AND u.isActive=true")
+    List<User> findByRoleAndStation(@Param("role") Role role, @Param("stationUid") String stationUid);
+
+    List<User> findByRole(Role targetRole);
 }

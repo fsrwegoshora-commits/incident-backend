@@ -1,5 +1,9 @@
 package com.smartincident.incidentbackend.police.service;
 
+import com.smartincident.incidentbackend.enums.NotificationChannel;
+import com.smartincident.incidentbackend.enums.NotificationType;
+import com.smartincident.incidentbackend.notification.dto.NotificationDto;
+import com.smartincident.incidentbackend.notification.service.NotificationService;
 import com.smartincident.incidentbackend.police.dto.OfficerShiftDto;
 import com.smartincident.incidentbackend.police.entity.OfficerShift;
 import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
@@ -25,6 +29,7 @@ public class OfficerShiftService {
     private final OfficerShiftRepository officerShiftRepository;
     private final PoliceOfficerRepository policeOfficerRepository;
     private final PoliceStationRepository policeStationRepository;
+    private final NotificationService notificationService;
 
     public Response<OfficerShift> saveShift(OfficerShiftDto dto) {
         if (dto == null) return Response.error("Shift DTO cannot be null");
@@ -60,6 +65,8 @@ public class OfficerShiftService {
         try {
             OfficerShift saved = officerShiftRepository.save(shift);
             log.info("Saved shift for officer {} on {}", saved.getOfficer().getBadgeNumber(), saved.getShiftDate());
+            notifyShiftAssignment(shift);
+
             return Response.success(saved);
         } catch (Exception e) {
             log.error("Failed to save shift: {}", e.getMessage());
@@ -84,6 +91,8 @@ public class OfficerShiftService {
         try {
             OfficerShift saved = officerShiftRepository.save(shift);
             log.info("Excused shift {} for officer {}", saved.getUid(), saved.getOfficer().getBadgeNumber());
+            notifyShiftExcuse(shift);
+
             return Response.success(saved);
         } catch (Exception e) {
             log.error("Failed to excuse shift: {}", e.getMessage());
@@ -144,9 +153,16 @@ public class OfficerShiftService {
         }
 
         // Step 1: Mark original shift as excused + reassigned
-        originalShift.setIsExcused(true);
-        originalShift.setIsReassigned(true);
-        officerShiftRepository.save(originalShift);
+        if(originalShift.getIsExcused()==true){
+            originalShift.setIsReassigned(true);
+            officerShiftRepository.save(originalShift);
+        }
+        else{
+            originalShift.setIsExcused(true);
+            originalShift.setIsReassigned(true);
+            officerShiftRepository.save(originalShift);
+            notifyShiftExcuse(originalShift);
+        }
 
         // Step 2: Create new shift for new officer
         OfficerShift newShift = new OfficerShift();
@@ -156,13 +172,15 @@ public class OfficerShiftService {
         newShift.setDutyDescription(originalShift.getDutyDescription());
         newShift.setIsPunishmentMode(false);
         newShift.setReassignedFromUid(originalShift.getUid());
-        newShift.setStartTime(startTime); // Set start time
-        newShift.setEndTime(endTime); // Set end time
+        newShift.setStartTime(startTime);
+        newShift.setEndTime(endTime);
         newShift.update();
 
         try {
             OfficerShift saved = officerShiftRepository.save(newShift);
             log.info("Reassigned shift from {} to {}", originalShift.getOfficer().getBadgeNumber(), saved.getOfficer().getBadgeNumber());
+            notifyShiftReassignment(saved);
+
             return Response.success(saved);
         } catch (Exception e) {
             log.error("Failed to save reassigned shift: {}", e.getMessage());
@@ -321,5 +339,44 @@ public class OfficerShiftService {
             return new ResponseList<>("Failed to find officers on duty: " + e.getMessage());
         }
     }
+    private void notifyShiftAssignment(OfficerShift newShift) {
+        NotificationDto notificationDto = new NotificationDto();
+        notificationDto.setTitle("Shift Assigned To You");
+        notificationDto.setMessage("You have been assigned a shift on " + newShift.getShiftDate());
+        notificationDto.setType(NotificationType.SHIFT_ASSIGNED);
+        notificationDto.setChannels(List.of(NotificationChannel.IN_APP));
+        notificationDto.setRelatedEntityUid(newShift.getUid());
+        notificationDto.setRelatedEntityType("SHIFT");
+        notificationDto.setTargetUserUids(List.of(newShift.getOfficer().getUserAccount().getUid()));
+
+        notificationService.sendNotification(notificationDto);
+    }
+
+    private void notifyShiftReassignment(OfficerShift newShift) {
+        NotificationDto notificationDto = new NotificationDto();
+        notificationDto.setTitle("Shift Reassignment To You");
+        notificationDto.setMessage("You have been Reassignment a shift on " + newShift.getShiftDate());
+        notificationDto.setType(NotificationType.SHIFT_REASSIGNED);
+        notificationDto.setChannels(List.of(NotificationChannel.IN_APP));
+        notificationDto.setRelatedEntityUid(newShift.getUid());
+        notificationDto.setRelatedEntityType("SHIFT");
+        notificationDto.setTargetUserUids(List.of(newShift.getOfficer().getUserAccount().getUid()));
+
+        notificationService.sendNotification(notificationDto);
+    }
+
+    private void notifyShiftExcuse(OfficerShift newShift) {
+        NotificationDto notificationDto = new NotificationDto();
+        notificationDto.setTitle("Shift Excused To You");
+        notificationDto.setMessage("You have been excused a shift on " + newShift.getShiftDate());
+        notificationDto.setType(NotificationType.SHIFT_EXCUSED);
+        notificationDto.setChannels(List.of(NotificationChannel.IN_APP));
+        notificationDto.setRelatedEntityUid(newShift.getUid());
+        notificationDto.setRelatedEntityType("SHIFT");
+        notificationDto.setTargetUserUids(List.of(newShift.getOfficer().getUserAccount().getUid()));
+
+        notificationService.sendNotification(notificationDto);
+    }
+
 }
 
