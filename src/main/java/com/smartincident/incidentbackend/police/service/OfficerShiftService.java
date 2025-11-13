@@ -344,7 +344,7 @@ public class OfficerShiftService {
         notificationDto.setTitle("Shift Assigned To You");
         notificationDto.setMessage("You have been assigned a shift on " + newShift.getShiftDate());
         notificationDto.setType(NotificationType.SHIFT_ASSIGNED);
-        notificationDto.setChannels(List.of(NotificationChannel.IN_APP));
+        notificationDto.setChannels(List.of(NotificationChannel.IN_APP,NotificationChannel.PUSH));
         notificationDto.setRelatedEntityUid(newShift.getUid());
         notificationDto.setRelatedEntityType("SHIFT");
         notificationDto.setTargetUserUids(List.of(newShift.getOfficer().getUserAccount().getUid()));
@@ -357,7 +357,7 @@ public class OfficerShiftService {
         notificationDto.setTitle("Shift Reassignment To You");
         notificationDto.setMessage("You have been Reassignment a shift on " + newShift.getShiftDate());
         notificationDto.setType(NotificationType.SHIFT_REASSIGNED);
-        notificationDto.setChannels(List.of(NotificationChannel.IN_APP));
+        notificationDto.setChannels(List.of(NotificationChannel.IN_APP,NotificationChannel.PUSH));
         notificationDto.setRelatedEntityUid(newShift.getUid());
         notificationDto.setRelatedEntityType("SHIFT");
         notificationDto.setTargetUserUids(List.of(newShift.getOfficer().getUserAccount().getUid()));
@@ -370,7 +370,7 @@ public class OfficerShiftService {
         notificationDto.setTitle("Shift Excused To You");
         notificationDto.setMessage("You have been excused a shift on " + newShift.getShiftDate());
         notificationDto.setType(NotificationType.SHIFT_EXCUSED);
-        notificationDto.setChannels(List.of(NotificationChannel.IN_APP));
+        notificationDto.setChannels(List.of(NotificationChannel.IN_APP,NotificationChannel.PUSH));
         notificationDto.setRelatedEntityUid(newShift.getUid());
         notificationDto.setRelatedEntityType("SHIFT");
         notificationDto.setTargetUserUids(List.of(newShift.getOfficer().getUserAccount().getUid()));

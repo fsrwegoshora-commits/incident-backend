@@ -362,7 +362,7 @@ public class IncidentReportService {
         notificationDto.setTitle("New Incident Reported");
         notificationDto.setMessage("A new incident has been reported: " + incident.getTitle());
         notificationDto.setType(NotificationType.INCIDENT_REPORTED);
-        notificationDto.setChannels(List.of(NotificationChannel.IN_APP));
+        notificationDto.setChannels(List.of(NotificationChannel.IN_APP,NotificationChannel.PUSH));
         notificationDto.setRelatedEntityUid(incident.getUid());
         notificationDto.setRelatedEntityType("INCIDENT");
         notificationDto.setTargetRole(Role.STATION_ADMIN);
@@ -376,7 +376,7 @@ public class IncidentReportService {
         notificationDto.setTitle("Incident Assigned To You");
         notificationDto.setMessage("You have been assigned to incident: " + incident.getTitle());
         notificationDto.setType(NotificationType.INCIDENT_ASSIGNED);
-        notificationDto.setChannels(List.of(NotificationChannel.IN_APP));
+        notificationDto.setChannels(List.of(NotificationChannel.IN_APP,NotificationChannel.PUSH));
         notificationDto.setRelatedEntityUid(incident.getUid());
         notificationDto.setRelatedEntityType("INCIDENT");
         notificationDto.setTargetUserUids(List.of(officer.getUserAccount().getUid(),incident.getReportedBy().getUid()));
