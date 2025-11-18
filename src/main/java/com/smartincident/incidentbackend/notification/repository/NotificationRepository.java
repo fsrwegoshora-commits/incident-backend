@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface NotificationRepository extends JpaRepository<Notification,Long> {
@@ -17,4 +18,6 @@ public interface NotificationRepository extends JpaRepository<Notification,Long>
     @Query("select n from Notification n where n.user.uid = :userUid and n.isActive=true")
     Page<Notification> findByUserUid(@Param("userUid") String userUid, Pageable pageable);
 
+    @Query("select n from Notification n where n.user.uid = :userUid and n.isActive=true")
+    List<Notification> getByUserUid(String userUid);
 }

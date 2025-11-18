@@ -1,5 +1,6 @@
 package com.smartincident.incidentbackend;
 
+import com.google.firebase.FirebaseApp;
 import com.smartincident.incidentbackend.utils.SpringContext;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -10,7 +11,12 @@ import org.springframework.context.ApplicationContextAware;
 public class IncidentBackendApplication implements ApplicationContextAware {
 
     public static void main(String[] args) {
-        SpringApplication.run(IncidentBackendApplication.class, args);
+        var ctx = SpringApplication.run(IncidentBackendApplication.class, args);
+
+        System.out.println("Firebase Apps after startup: " + FirebaseApp.getApps().size());
+        FirebaseApp.getApps().forEach(app ->
+                System.out.println("Firebase READY → " + app.getName() + " | Project: " + app.getOptions().getProjectId())
+        );
     }
 
     @Override

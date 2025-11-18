@@ -4,38 +4,42 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 
-import javax.annotation.PostConstruct;
 import java.io.IOException;
 
 @Slf4j
 @Configuration
 public class FirebaseConfig {
 
-    @Value("${firebase.config.path:firebase-service-account.json}")
-    private String firebaseConfigPath;
+    @Bean
+    public FirebaseApp firebaseApp() throws IOException {
+        log.warn("FIREBASE BEAN INAANZA KWANZA KABISA!");
 
-    @PostConstruct
-    public void initialize() {
-        try {
-            if (FirebaseApp.getApps().isEmpty()) {
-                GoogleCredentials credentials = GoogleCredentials
-                        .fromStream(new ClassPathResource(firebaseConfigPath).getInputStream());
-
-                FirebaseOptions options = FirebaseOptions.builder()
-                        .setCredentials(credentials)
-                        .build();
-
-                FirebaseApp.initializeApp(options);
-                log.info("Firebase application initialized successfully");
-            } else {
-                log.info("Firebase application already initialized");
-            }
-        } catch (IOException e) {
-            log.error(" Failed to initialize Firebase: {}", e.getMessage());
+        if (!FirebaseApp.getApps().isEmpty()) {
+            log.info("Firebase tayari imeanza, narudisha ile iliyopo");
+            return FirebaseApp.getInstance();
         }
+
+        var resource = new ClassPathResource("firebase-service-account.json");
+        if (!resource.exists()) {
+            log.error("firebase-service-account.json HAIPO! Weka kwenye src/main/resources/");
+            throw new RuntimeException("Firebase config file missing!");
+        }
+
+        log.info("Imepata file → {}", resource.getURL());
+
+        var credentials = GoogleCredentials.fromStream(resource.getInputStream());
+        var options = FirebaseOptions.builder()
+                .setCredentials(credentials)
+                .build();
+
+        FirebaseApp app = FirebaseApp.initializeApp(options);
+        log.warn("FIREBASE IMEANZA VIZURI KAMA SPRING BEAN!");
+        log.warn("Project ID: {}", app.getOptions().getProjectId());
+
+        return app;
     }
 }

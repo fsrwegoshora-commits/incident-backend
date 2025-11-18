@@ -23,4 +23,5 @@ public interface DeviceTokenRepository extends JpaRepository<DeviceToken, Long> 
     @Modifying
     @Query("UPDATE DeviceToken dt SET dt.isActive = false WHERE dt.token = :token")
     void deactivateByToken(@Param("token") String token);
+
 }

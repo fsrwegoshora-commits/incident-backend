@@ -116,7 +116,7 @@ public class IncidentReportService {
 
         try {
             incident = incidentRepository.save(incident);
-            log.info("✅ Incident created successfully: {}", incident.getUid());
+            log.info("Incident created successfully: {}", incident.getUid());
             notifyIncidentCreation(incident);
             return new Response<>(incident);
         } catch (Exception e) {
@@ -201,13 +201,13 @@ public class IncidentReportService {
 
         try {
             incident = incidentRepository.save(incident);
-            log.info("✅ Officer assigned successfully");
+            log.info("Officer assigned successfully");
 
             notifyOfficerAssignment(incident, officer);
 
             return new Response<>(incident+"Officer assigned successfully");
         } catch (Exception e) {
-            log.error(" Failed to assign officer: {}", e.getMessage());
+            e.printStackTrace();
             return Response.error("Failed to assign officer: " + Utils.getExceptionMessage(e));
         }
     }

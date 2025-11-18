@@ -11,8 +11,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -64,9 +66,7 @@ public class DeviceTokenService {
         }
     }
 
-    public List<String> getActiveTokensByUserUid(String userUid) {
-        return deviceTokenRepository.findActiveTokensByUserUid(userUid);
-    }
+
 
     @Transactional
     public Response<Boolean> removeToken(String token) {
@@ -77,6 +77,21 @@ public class DeviceTokenService {
         } catch (Exception e) {
             log.error("Failed to remove device token: {}", e.getMessage());
             return Response.error("Failed to remove device token");
+        }
+    }
+    public List<String> getActiveTokensByUserUid(String userUid) {
+        try {
+            List<DeviceToken> tokens = deviceTokenRepository.findByUserUidAndIsActiveTrue(userUid);
+            List<String> tokenStrings = tokens.stream()
+                    .map(DeviceToken::getToken)
+                    .collect(Collectors.toList());
+
+            log.info("📱 Found {} active device tokens for user: {}", tokenStrings.size(), userUid);
+            return tokenStrings;
+
+        } catch (Exception e) {
+            log.error("❌ Error getting device tokens for user {}: {}", userUid, e.getMessage());
+            return new ArrayList<>();
         }
     }
 }

@@ -428,11 +428,14 @@ public class ChatMessageService {
             notificationDto.setMessage(message.getSender().getName() + ": " +
                     (message.getMessage() != null ? message.getMessage() : "Sent a media file"));
             notificationDto.setType(NotificationType.CHAT_MESSAGE);
-            notificationDto.setChannels(List.of(NotificationChannel.IN_APP,NotificationChannel.PUSH));
+
+            notificationDto.setChannels(List.of(NotificationChannel.IN_APP, NotificationChannel.PUSH));
+
             notificationDto.setRelatedEntityUid(incident.getUid());
             notificationDto.setRelatedEntityType("INCIDENT");
             notificationDto.setTargetUserUids(recipientUids);
 
+            log.info("💬 Sending chat notification to {} users: {}", recipientUids.size(), recipientUids);
             notificationService.sendNotification(notificationDto);
         }
     }

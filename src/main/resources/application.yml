@@ -1,0 +1,8 @@
+firebase:
+  config:
+    path: firebase-service-account.json
+
+logging:
+  level:
+    com.smartincident.incidentbackend: DEBUG
+    root: INFO

@@ -1,11 +1,11 @@
 package com.smartincident.incidentbackend.notification.service;
 
-import com.google.api.client.util.Value;
+import org.springframework.beans.factory.annotation.Value;
 import com.smartincident.incidentbackend.enums.NotificationChannel;
 import com.smartincident.incidentbackend.enums.NotificationType;
 import com.smartincident.incidentbackend.notification.dto.NotificationDto;
+import com.smartincident.incidentbackend.notification.dto.NotificationResponseDto;
 import com.smartincident.incidentbackend.notification.entity.Notification;
-import com.smartincident.incidentbackend.notification.entity.NotificationPreference;
 import com.smartincident.incidentbackend.notification.repository.NotificationPreferenceRepository;
 import com.smartincident.incidentbackend.notification.repository.NotificationRepository;
 import com.smartincident.incidentbackend.authotp.entity.User;
@@ -13,11 +13,13 @@ import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.utils.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -27,9 +29,11 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final NotificationPreferenceRepository preferenceRepository;
     private final UserRepository userRepository;
-    private final SmsService smsService;
     private final PushNotificationService pushNotificationService;
     private final DeviceTokenService deviceTokenService;
+
+    // Add WebSocket or Server-Sent Events support
+    private final SimpMessagingTemplate simpMessagingTemplate;
 
     @Value("${app.notification.push.enabled:true}")
     private boolean pushEnabled;
@@ -38,7 +42,6 @@ public class NotificationService {
     public ResponseList<Notification> sendNotification(NotificationDto dto) {
         log.info("Sending in-app notification: {}", dto.getTitle());
 
-        // Basic validation
         if (dto.getTitle() == null || dto.getTitle().trim().isEmpty()) {
             return ResponseList.error("Notification title is required");
         }
@@ -67,11 +70,20 @@ public class NotificationService {
                 List<NotificationChannel> channels = new ArrayList<>();
                 channels.add(NotificationChannel.IN_APP);
 
-                if (pushEnabled && dto.getChannels().contains(NotificationChannel.PUSH)) {
+                // 🔥 CRITICAL FIX: Check if PUSH channel is requested AND push is enabled
+                boolean shouldSendPush = pushEnabled &&
+                        dto.getChannels() != null &&
+                        dto.getChannels().contains(NotificationChannel.PUSH);
+
+                log.info("📱 Push notification check - Enabled: {}, Channels: {}, ShouldSend: {}",
+                        pushEnabled, dto.getChannels(), shouldSendPush);
+
+                if (shouldSendPush) {
                     boolean pushSent = sendPushNotificationToUser(user, dto);
+                    log.info("📱 Push notification result for user {}: {}", user.getPhoneNumber(), pushSent);
+
                     if (pushSent) {
                         channels.add(NotificationChannel.PUSH);
-                        log.debug(" Push notification sent to user: {}", user.getPhoneNumber());
                     }
                 }
 
@@ -80,14 +92,56 @@ public class NotificationService {
 
                 Notification saved = notificationRepository.save(notification);
                 sentNotifications.add(saved);
+
+                // Broadcast real-time notification
+                broadcastNotificationToUser(userUid, saved);
             }
 
             log.info("Sent {} notifications (in-app + push)", sentNotifications.size());
             return new ResponseList<>(sentNotifications);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("❌ Failed to send notifications: {}", e.getMessage(), e);
             return ResponseList.error("Failed to send notifications: " + e.getMessage());
+        }
+    }
+
+    private boolean sendPushNotificationToUser(User user, NotificationDto dto) {
+        try {
+            // Check if push is enabled globally
+            if (!pushEnabled) {
+                log.info("📱 Push notifications disabled globally");
+                return false;
+            }
+
+            List<String> deviceTokens = deviceTokenService.getActiveTokensByUserUid(user.getUid());
+
+            if (deviceTokens == null || deviceTokens.isEmpty()) {
+                log.warn("📱 No device tokens found for user: {}", user.getPhoneNumber());
+                return false;
+            }
+
+            log.info("📱 Attempting push to {} devices for user: {}", deviceTokens.size(), user.getPhoneNumber());
+
+            String relatedEntityUid = dto.getRelatedEntityUid() != null ? dto.getRelatedEntityUid() : "";
+            String relatedEntityType = dto.getRelatedEntityType() != null ? dto.getRelatedEntityType() : "";
+
+            Map<String, String> data = Map.of(
+                    "type", dto.getType().name(),
+                    "relatedEntityUid", relatedEntityUid,
+                    "relatedEntityType", relatedEntityType,
+                    "click_action", "FLUTTER_NOTIFICATION_CLICK",
+                    "screen", getScreenForNotificationType(dto.getType())
+            );
+
+            boolean sent = pushNotificationService.sendToDevices(deviceTokens, dto.getTitle(), dto.getMessage(), data);
+
+            log.info("📱 Push notification result for user {}: {}", user.getPhoneNumber(), sent);
+            return sent;
+
+        } catch (Exception e) {
+            log.error("❌ Error sending push notification to user {}: {}", user.getPhoneNumber(), e.getMessage());
+            return false;
         }
     }
 
@@ -135,9 +189,12 @@ public class NotificationService {
 
                 Notification saved = notificationRepository.save(notification);
                 sentNotifications.add(saved);
+
+                // ===== BROADCAST REAL-TIME NOTIFICATION =====
+                broadcastNotificationToUser(user.getUid(), saved);
             }
 
-            log.info(" Sent {} notifications to role {}", sentNotifications.size(), dto.getTargetRole());
+            log.info("Sent {} notifications to role {}", sentNotifications.size(), dto.getTargetRole());
             return new ResponseList<>(sentNotifications);
 
         } catch (Exception e) {
@@ -152,50 +209,9 @@ public class NotificationService {
             return new ResponsePage<>("User not authenticated");
         }
 
-        return new ResponsePage<>(notificationRepository.findByUserUid(
-                userUid, pageableParam.getPageable(true)
-        ));
+        return new ResponsePage<>(notificationRepository.findByUserUid(userUid, pageableParam.getPageable(true)));
     }
 
-
-    private boolean sendPushNotificationToUser(User user, NotificationDto dto) {
-        try {
-            // Get user's device tokens
-            List<String> deviceTokens = deviceTokenService.getActiveTokensByUserUid(user.getUid());
-
-            if (deviceTokens.isEmpty()) {
-                log.debug("📱 No device tokens found for user: {}", user.getPhoneNumber());
-                return false;
-            }
-
-            // Prepare data for Flutter - FIX NULL SAFETY
-            String relatedEntityUid = dto.getRelatedEntityUid() != null ? dto.getRelatedEntityUid() : "";
-            String relatedEntityType = dto.getRelatedEntityType() != null ? dto.getRelatedEntityType() : "";
-
-            Map<String, String> data = Map.of(
-                    "type", dto.getType().name(),
-                    "relatedEntityUid", relatedEntityUid,
-                    "relatedEntityType", relatedEntityType,
-                    "click_action", "FLUTTER_NOTIFICATION_CLICK",
-                    "screen", getScreenForNotificationType(dto.getType())
-            );
-
-            // Send push notification
-            boolean sent = pushNotificationService.sendToDevices(deviceTokens, dto.getTitle(), dto.getMessage(), data);
-
-            if (sent) {
-                log.info("📱 Push notification sent to user: {} ({} devices)", user.getPhoneNumber(), deviceTokens.size());
-            } else {
-                log.warn("📱 Push notification failed for user: {}", user.getPhoneNumber());
-            }
-
-            return sent;
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
 
     private String getScreenForNotificationType(NotificationType type) {
         switch (type) {
@@ -222,7 +238,6 @@ public class NotificationService {
 
         Notification notification = notificationOpt.get();
 
-        // Verify ownership
         String currentUserUid = LoggedUser.getUid();
         if (!notification.getUser().getUid().equals(currentUserUid)) {
             return Response.error("Access denied");
@@ -233,7 +248,7 @@ public class NotificationService {
 
         try {
             Notification updated = notificationRepository.save(notification);
-            log.debug(" Notification marked as read: {}", notificationUid);
+            log.debug("Notification marked as read: {}", notificationUid);
             return Response.success(updated);
         } catch (Exception e) {
             e.printStackTrace();
@@ -248,19 +263,83 @@ public class NotificationService {
         }
 
         long count = notificationRepository.countByUserUidAndReadFalse(userUid);
-        log.debug("📊 Unread notifications count for user {}: {}", userUid, count);
+        log.debug("Unread notifications count for user {}: {}", userUid, count);
         return Response.success(count);
     }
 
-    private NotificationPreference getUserNotificationPreference(User user) {
-        return preferenceRepository.findByUser(user)
-                .orElseGet(() -> {
-                    NotificationPreference defaultPref = new NotificationPreference();
-                    defaultPref.setUser(user);
-                    defaultPref.setSmsEnabled(true);
-                    defaultPref.setPushEnabled(true);
-                    defaultPref.setEmailEnabled(false);
-                    return preferenceRepository.save(defaultPref);
-                });
+    public ResponseList<Notification> clearNotifications(String userUid) {
+
+        if (userUid == null)
+            return new ResponseList<>("Id is required");
+
+        Optional<User> oUser = userRepository.findByUid(userUid);
+        if (!oUser.isPresent())
+            return new ResponseList<>("Invalid id provided");
+
+        User user = oUser.get();
+        if (!user.getIsActive())
+            return new ResponseList<>("User already deleted");
+
+        List<Notification> notifications = notificationRepository.getByUserUid(userUid);
+
+        if (notifications.isEmpty())
+            return new ResponseList<>("NO notification to clear");
+
+        List<Notification> toDelete = new ArrayList<>();
+
+        for (Notification n : notifications) {
+            if (!Boolean.TRUE.equals(n.getRead())) {
+                return new ResponseList<>("Some notifications are not read yet");
+            }
+            n.delete();
+            toDelete.add(n);
+        }
+
+        try {
+            notificationRepository.saveAll(toDelete);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ResponseList<>("Some notifications were not deleted");
+        }
+
+        return new ResponseList<>(toDelete);
+    }
+
+    // ============================================================================
+    // REAL-TIME BROADCASTING METHODS
+    // ============================================================================
+
+    /**
+     * Broadcast notification to specific user in real-time
+     */
+    private void broadcastNotificationToUser(String userUid, Notification notification) {
+        try {
+            NotificationResponseDto notifDto = convertToNotificationResponse(notification);
+
+            // Send via WebSocket to user
+            String destination = "/user/" + userUid + "/queue/notifications";
+            simpMessagingTemplate.convertAndSendToUser(userUid, "/queue/notifications", notifDto);
+
+            log.info("✅ Real-time notification sent to user: {}", userUid);
+        } catch (Exception e) {
+            log.warn("⚠️ Failed to broadcast real-time notification: {}", e.getMessage());
+        }
+    }
+
+
+    private NotificationResponseDto convertToNotificationResponse(Notification notification) {
+        return NotificationResponseDto.builder()
+                .uid(notification.getUid())
+                .title(notification.getTitle())
+                .message(notification.getMessage())
+                .type(notification.getType().name())
+                .relatedEntityUid(notification.getRelatedEntityUid())
+                .relatedEntityType(notification.getRelatedEntityType())
+                .sentAt(notification.getSentAt())
+                .readAt(notification.getReadAt())
+                .isRead(notification.getRead())
+                .channels(notification.getChannels().stream().map(Enum::name).collect(Collectors.toList()))
+                .build();
     }
 }
+

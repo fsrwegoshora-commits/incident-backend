@@ -44,7 +44,7 @@ public class NotificationController {
     }
 
     @Authenticated
-    @GraphQLQuery(name = "markAsRead", description = "Get incident by UID")
+    @GraphQLMutation(name = "markAsRead", description = "Get notification by UID")
     public Response<Notification> markAsRead(@GraphQLArgument(name = "notificationUid") String notificationUid) {
         return notificationService.markAsRead(notificationUid);
     }
@@ -54,4 +54,11 @@ public class NotificationController {
     public Response<Long> getUnreadCount() {
         return notificationService.getUnreadCount();
     }
+
+    @Authenticated
+    @GraphQLMutation(name = "clearNotifications", description = "Get notifications by UID")
+    public ResponseList<Notification> clearNotifications(@GraphQLArgument(name = "userUid") String userUid) {
+        return notificationService.clearNotifications(userUid);
+    }
+
 }
