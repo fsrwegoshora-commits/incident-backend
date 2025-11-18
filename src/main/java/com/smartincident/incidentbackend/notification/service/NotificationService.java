@@ -288,9 +288,6 @@ public class NotificationService {
         List<Notification> toDelete = new ArrayList<>();
 
         for (Notification n : notifications) {
-            if (!Boolean.TRUE.equals(n.getRead())) {
-                return new ResponseList<>("Some notifications are not read yet");
-            }
             n.delete();
             toDelete.add(n);
         }
