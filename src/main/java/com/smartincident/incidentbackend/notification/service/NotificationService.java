@@ -288,6 +288,7 @@ public class NotificationService {
         List<Notification> toDelete = new ArrayList<>();
 
         for (Notification n : notifications) {
+            n.setRead(true);
             n.delete();
             toDelete.add(n);
         }
@@ -302,13 +303,41 @@ public class NotificationService {
         return new ResponseList<>(toDelete);
     }
 
-    // ============================================================================
-    // REAL-TIME BROADCASTING METHODS
-    // ============================================================================
+    public ResponseList<Notification> markAllRead(String userUid) {
 
-    /**
-     * Broadcast notification to specific user in real-time
-     */
+        if (userUid == null)
+            return new ResponseList<>("Id is required");
+
+        Optional<User> oUser = userRepository.findByUid(userUid);
+        if (!oUser.isPresent())
+            return new ResponseList<>("Invalid id provided");
+
+        User user = oUser.get();
+        if (!user.getIsActive())
+            return new ResponseList<>("User already deleted");
+
+        List<Notification> notifications = notificationRepository.getNotReadByUserUid(userUid);
+
+        if (notifications.isEmpty())
+            return new ResponseList<>("NO notification to mark read");
+
+        List<Notification> toRead = new ArrayList<>();
+
+        for (Notification n : notifications) {
+            n.setRead(true);
+            toRead.add(n);
+        }
+
+        try {
+            notificationRepository.saveAll(toRead);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ResponseList<>("Some notifications were not marked as read");
+        }
+
+        return new ResponseList<>(toRead);
+    }
+
     private void broadcastNotificationToUser(String userUid, Notification notification) {
         try {
             NotificationResponseDto notifDto = convertToNotificationResponse(notification);

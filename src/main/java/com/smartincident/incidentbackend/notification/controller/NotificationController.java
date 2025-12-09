@@ -61,4 +61,9 @@ public class NotificationController {
         return notificationService.clearNotifications(userUid);
     }
 
+    @Authenticated
+    @GraphQLMutation(name = "markAllRead", description = "Get notifications by user")
+    public ResponseList<Notification> markAllRead(@GraphQLArgument(name = "userUid") String userUid) {
+        return notificationService.markAllRead(userUid);
+    }
 }

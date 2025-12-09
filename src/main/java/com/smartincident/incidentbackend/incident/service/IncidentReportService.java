@@ -118,6 +118,8 @@ public class IncidentReportService {
             incident = incidentRepository.save(incident);
             log.info("Incident created successfully: {}", incident.getUid());
             notifyIncidentCreation(incident);
+            assert officer != null;
+            notifyOfficerAssignment(incident, officer);
             return new Response<>(incident);
         } catch (Exception e) {
             log.error("Failed to create incident: {}", e.getMessage());
@@ -379,7 +381,7 @@ public class IncidentReportService {
         notificationDto.setChannels(List.of(NotificationChannel.IN_APP,NotificationChannel.PUSH));
         notificationDto.setRelatedEntityUid(incident.getUid());
         notificationDto.setRelatedEntityType("INCIDENT");
-        notificationDto.setTargetUserUids(List.of(officer.getUserAccount().getUid(),incident.getReportedBy().getUid()));
+        notificationDto.setTargetUserUids(List.of(officer.getUserAccount().getUid()));
 
         notificationService.sendNotification(notificationDto);
     }

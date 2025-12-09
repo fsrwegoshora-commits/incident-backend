@@ -20,4 +20,7 @@ public interface NotificationRepository extends JpaRepository<Notification,Long>
 
     @Query("select n from Notification n where n.user.uid = :userUid and n.isActive=true")
     List<Notification> getByUserUid(String userUid);
+
+    @Query("select n from Notification n where n.user.uid = :userUid and n.read = false and n.isActive=true and n.type = com.smartincident.incidentbackend.enums.NotificationType.CHAT_MESSAGE")
+    List<Notification> getNotReadByUserUid(String userUid);
 }

@@ -13,29 +13,29 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-
         // Enable simple broker for topics and queues
         config.enableSimpleBroker("/topic", "/queue", "/user");
 
-        // Application prefix
+        // Application prefix for client messages
         config.setApplicationDestinationPrefixes("/app");
 
-        // User-specific queue prefix
+        // User destination prefix for private messages
         config.setUserDestinationPrefix("/user");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-
-        // Flutter mobile must use pure WebSocket (NO SockJS)
         registry.addEndpoint("/ws-notifications")
-                .setAllowedOriginPatterns("*"); // Use OriginPatterns instead of Origins
+                .setAllowedOriginPatterns("*")
+                .withSockJS();
     }
 
     @Override
     public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
-        registration.setMessageSizeLimit(160 * 64 * 1024);
-        registration.setSendBufferSizeLimit(10 * 1024 * 1024);
-        registration.setSendTimeLimit(10000);
+        // Configure buffer sizes
+        registration.setMessageSizeLimit(160 * 64 * 1024);        // 10 MB
+        registration.setSendBufferSizeLimit(10 * 1024 * 1024);    // 10 MB
+        registration.setSendTimeLimit(10000);                      // 10 seconds
+        registration.setTimeToFirstMessage(30000);                 // 30 seconds
     }
 }
