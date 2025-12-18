@@ -1,7 +1,8 @@
 package com.smartincident.incidentbackend.police.entity;
 
 import com.smartincident.incidentbackend.entity.BaseEntity;
-import com.smartincident.incidentbackend.enums.ShiftType;
+import com.smartincident.incidentbackend.enums.ShiftDutyType;
+import com.smartincident.incidentbackend.enums.ShiftTime;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -27,7 +28,11 @@ public class OfficerShift extends BaseEntity {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private ShiftType shiftType;
+    private ShiftTime shiftTime;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private ShiftDutyType shiftDutyType;
 
     @Column(nullable = false)
     private LocalTime startTime;
@@ -48,5 +53,7 @@ public class OfficerShift extends BaseEntity {
 
     private String reassignedFromUid;
 
+    @ManyToOne
+    @JoinColumn(name = "checkpoint_id")
+    private TrafficCheckpoint checkpoint;
 }
-

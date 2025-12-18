@@ -3,8 +3,11 @@ package com.smartincident.incidentbackend.police.service;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.police.dto.PoliceOfficerDto;
+import com.smartincident.incidentbackend.setting.entity.Department;
 import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
+import com.smartincident.incidentbackend.setting.repository.AgencyRepository;
+import com.smartincident.incidentbackend.setting.repository.DepartmentRepository;
 import com.smartincident.incidentbackend.police.repository.PoliceOfficerRepository;
 import com.smartincident.incidentbackend.police.repository.PoliceStationRepository;
 import com.smartincident.incidentbackend.utils.*;
@@ -20,6 +23,8 @@ import java.util.Optional;
 @Slf4j
 @GraphQLApi
 public class PoliceOfficerService {
+    private final DepartmentRepository departmentRepository;
+    private final AgencyRepository agencyRepository;
 
     private final PoliceOfficerRepository policeOfficerRepository;
     private final PoliceStationRepository policeStationRepository;
@@ -48,6 +53,12 @@ public class PoliceOfficerService {
                 if (userOpt.isEmpty()) return Response.error("User not found");
                 officer.setUserAccount(userOpt.get());
             }
+
+            if(dto.getDepartmentUid() != null){
+                Optional<Department> departmentOpt = departmentRepository.findByUid(dto.getDepartmentUid());
+                if(departmentOpt.isEmpty()) return Response.error("department not found");
+                officer.setDepartment(departmentOpt.get());
+            }
             officer.update();
         }
 
@@ -55,6 +66,7 @@ public class PoliceOfficerService {
         else {
             if (dto.getBadgeNumber() == null) return Response.error("Badge number is required");
             if (dto.getCode() == null) return Response.error("Officer rank is required");
+            if(dto.getDepartmentUid() == null) return Response.error("Department is required");
             if (dto.getStationUid() == null) return Response.error("Station is required");
             if (dto.getUserUid() == null) return Response.error("User is required");
 
@@ -65,9 +77,13 @@ public class PoliceOfficerService {
             boolean alreadyAssigned = policeOfficerRepository.existsByUserAccount(userOpt.get());
             if (alreadyAssigned) return Response.error("This user is already assigned as a police officer");
 
+            Optional<Department> departmentOpt = departmentRepository.findByUid(dto.getDepartmentUid());
+            if(departmentOpt.isEmpty()) return Response.error("department not found");
+
             Utils.copyProperties(dto, officer);
             officer.setCode(dto.getCode());
             officer.setUserAccount(userOpt.get());
+            officer.setDepartment(departmentOpt.get());
 
             Optional<PoliceStation> stationOpt = policeStationRepository.findByUid(dto.getStationUid());
             if (stationOpt.isEmpty()) return Response.error("Station not found");

@@ -25,28 +25,28 @@ public class DepartmentController {
     private  final DepartmentService departmentService;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN})
+    @AuthorizedRole({Role.ROOT})
     @GraphQLMutation(name = "saveDepartment", description = "Saving department information")
     public Response<Department>saveDepartment(@GraphQLArgument(name = "departmentDto") DepartmentDto departmentDto){
         return departmentService.saveDepartment(departmentDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN})
+    @AuthorizedRole({Role.ROOT})
     @GraphQLMutation(name = "deleteDepartment", description = "Deleting department information")
     public Response<Department>deleteDepartment(@GraphQLArgument(name = "uid") String uid){
         return departmentService.deleteDepartment(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN})
+    @AuthorizedRole({Role.ROOT,Role.STATION_ADMIN})
     @GraphQLQuery(name = "getDepartment", description = "Getting department information")
     public Response<Department> getDepartment(@GraphQLArgument(name = "uid") String uid){
         return departmentService.getDepartmentByUid(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN})
+    @AuthorizedRole({Role.ROOT,Role.STATION_ADMIN})
     @GraphQLQuery(name = "getDepartments", description = "Getting departments information")
     public ResponsePage<Department>getDepartments(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam){
         return departmentService.getDepartments(pageableParam!=null?pageableParam:new PageableParam());

@@ -45,4 +45,7 @@ public interface OfficerShiftRepository extends JpaRepository<OfficerShift,Long>
             "WHERE s.shiftDate = :date " +
             "AND s.isDeleted = false")
     List<OfficerShift> findByDate(@Param("date") LocalDate date);
+
+    @Query("select o from OfficerShift o where (:isActive is null or o.isActive=:isActive) and (lower(concat(o.officer.userAccount.name, o.officer.userAccount.phoneNumber)) like %:key%) and o.checkpoint.uid = :checkpointUid")
+    Page<OfficerShift> getPoliceOfficerShiftsByCheckpoint(Pageable pageable, Boolean isActive, String key, String checkpointUid);
 }

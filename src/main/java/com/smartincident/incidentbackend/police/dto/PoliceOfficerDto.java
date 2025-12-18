@@ -15,4 +15,5 @@ public class PoliceOfficerDto {
     private OfficerRank code;
     private String stationUid;
     private String userUid;
+    private String departmentUid;
 }

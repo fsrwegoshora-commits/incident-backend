@@ -25,28 +25,28 @@ public class AgencyController {
     private final AgencyService agencyService;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN})
+    @AuthorizedRole({Role.ROOT})
     @GraphQLMutation(name = "saveAgency", description = "Saving agency information")
     public Response<Agency>saveAgency(@GraphQLArgument(name = "agencyDto") AgencyDto agencyDto){
         return agencyService.saveAgency(agencyDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN})
+    @AuthorizedRole({Role.ROOT,Role.STATION_ADMIN})
     @GraphQLQuery(name = "getAgency", description = "Getting agency information")
     public Response<Agency> getAgency(@GraphQLArgument(name = "uid") String uid){
         return agencyService.getAgencyByUid(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN})
+    @AuthorizedRole({Role.ROOT})
     @GraphQLMutation(name = "deleteAgency", description = "Deleting agency information")
     public Response<Agency>deleteAgency(@GraphQLArgument(name = "uid") String uid){
         return agencyService.deleteAgency(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN})
+    @AuthorizedRole({Role.ROOT,Role.STATION_ADMIN})
     @GraphQLQuery(name = "getAgencies", description = "Getting agencies information")
     public ResponsePage<Agency>getAgencies(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam){
         return agencyService.getAgencies(pageableParam!=null?pageableParam:new PageableParam());

@@ -10,5 +10,6 @@ public enum NotificationType {
     CHAT_MESSAGE,
     SYSTEM_ALERT,
     EMERGENCY,
-    INFORMATION
+    INFORMATION,
+    SUPERVISOR_ALERT
 }

@@ -3,6 +3,7 @@ package com.smartincident.incidentbackend.police.controller;
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
 import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
 import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.police.dto.BulkCheckpointShiftDto;
 import com.smartincident.incidentbackend.police.dto.OfficerShiftDto;
 import com.smartincident.incidentbackend.police.entity.OfficerShift;
 import com.smartincident.incidentbackend.police.service.OfficerShiftService;
@@ -51,6 +52,13 @@ public class OfficerShiftController {
     }
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
+    @GraphQLQuery(name = "getPoliceOfficerShiftsByCheckpoint", description = "Gets a page of police officer shift")
+    public ResponsePage<OfficerShift> getPoliceOfficerShiftsByCheckpoint(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam,@GraphQLArgument(name = "checkpointUid") String checkpointUid) {
+        return officerShiftService.getPoliceOfficerShiftsByCheckpoint(pageableParam != null ? pageableParam : new PageableParam(),checkpointUid);
+    }
+
+    @Authenticated
+    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
     @GraphQLQuery(name = "getPoliceOfficerShifts", description = "Gets a page of police officer shift")
     public ResponsePage<OfficerShift> getPoliceOfficerShifts(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam) {
         return officerShiftService.getPoliceOfficerShifts(pageableParam != null ? pageableParam : new PageableParam());
@@ -87,5 +95,12 @@ public class OfficerShiftController {
     @GraphQLQuery(name = "getAllOfficersOnDutyNow", description = "Gets all officers currently on duty")
     public ResponseList<OfficerShift> getAllOfficersOnDutyNow(@GraphQLArgument(name = "stationUid") String stationUid) {
         return officerShiftService.getAllOfficersOnDutyNow(stationUid);
+    }
+
+    @Authenticated
+    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
+    @GraphQLMutation(name = "assignCheckpointShiftBulk", description = "New police officer check point shift")
+    public ResponseList<OfficerShift> assignCheckpointShiftBulk(@GraphQLArgument(name = "bulkCheckpointShiftDto") BulkCheckpointShiftDto bulkCheckpointShiftDto) {
+        return officerShiftService.assignCheckpointShiftBulk(bulkCheckpointShiftDto);
     }
 }

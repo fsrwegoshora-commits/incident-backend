@@ -2,15 +2,19 @@ package com.smartincident.incidentbackend.police.service;
 
 import com.smartincident.incidentbackend.enums.NotificationChannel;
 import com.smartincident.incidentbackend.enums.NotificationType;
+import com.smartincident.incidentbackend.enums.ShiftDutyType;
 import com.smartincident.incidentbackend.notification.dto.NotificationDto;
 import com.smartincident.incidentbackend.notification.service.NotificationService;
+import com.smartincident.incidentbackend.police.dto.BulkCheckpointShiftDto;
 import com.smartincident.incidentbackend.police.dto.OfficerShiftDto;
 import com.smartincident.incidentbackend.police.entity.OfficerShift;
 import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
+import com.smartincident.incidentbackend.police.entity.TrafficCheckpoint;
 import com.smartincident.incidentbackend.police.repository.OfficerShiftRepository;
 import com.smartincident.incidentbackend.police.repository.PoliceOfficerRepository;
 import com.smartincident.incidentbackend.police.repository.PoliceStationRepository;
+import com.smartincident.incidentbackend.police.repository.TrafficCheckPointRepository;
 import com.smartincident.incidentbackend.utils.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +22,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -30,33 +35,80 @@ public class OfficerShiftService {
     private final PoliceOfficerRepository policeOfficerRepository;
     private final PoliceStationRepository policeStationRepository;
     private final NotificationService notificationService;
+    private final TrafficCheckPointRepository trafficCheckpointRepository;
 
     public Response<OfficerShift> saveShift(OfficerShiftDto dto) {
         if (dto == null) return Response.error("Shift DTO cannot be null");
 
         OfficerShift shift = new OfficerShift();
+
+        // Update mode
         if (dto.getUid() != null) {
             Optional<OfficerShift> existing = officerShiftRepository.findByUid(dto.getUid());
             if (existing.isEmpty()) return Response.error("Invalid shift UID");
             shift = existing.get();
         }
 
+        // Required fields
         if (dto.getOfficerUid() == null) return Response.error("Officer UID is required");
         if (dto.getShiftDate() == null) return Response.error("Shift date is required");
-        if (dto.getShiftType() == null) return Response.error("Shift type is required");
-        if(dto.getStartTime() ==null) return Response.error("start time is required");
-        if(dto.getEndTime() ==null) return Response.error("end time is required");
+        if (dto.getShiftTime() == null) return Response.error("Shift time is required");
+        if (dto.getShiftDutyType() == null) return Response.error("Shift duty type is required");
+        if (dto.getStartTime() == null) return Response.error("Start time is required");
+        if (dto.getEndTime() == null) return Response.error("End time is required");
 
+        // Officer lookup
         Optional<PoliceOfficer> officerOpt = policeOfficerRepository.findByUid(dto.getOfficerUid());
         if (officerOpt.isEmpty()) return Response.error("Officer not found");
 
+        // CHECKPOINT VALIDATION
+        if (dto.getShiftDutyType() == ShiftDutyType.CHECKPOINT_DUTY && dto.getCheckpointUid() == null) {
+            return Response.error("Checkpoint is required for CHECKPOINT_DUTY");
+        }
+
+        // Load checkpoint if provided
+        TrafficCheckpoint checkpoint = null;
+        if (dto.getCheckpointUid() != null) {
+            Optional<TrafficCheckpoint> checkpointOpt = trafficCheckpointRepository.findByUid(dto.getCheckpointUid());
+            if (checkpointOpt.isEmpty()) return Response.error("Invalid checkpoint UID");
+            checkpoint = checkpointOpt.get();
+            shift.setCheckpoint(checkpoint);
+        } else {
+            shift.setCheckpoint(null);
+        }
+
+        if (checkpoint != null && checkpoint.getSupervisingOfficer() != null) {
+            PoliceOfficer supervisor = checkpoint.getSupervisingOfficer();
+            if (supervisor.getUid().equals(dto.getOfficerUid())) {
+                return Response.error("Supervisor cannot be assigned as a checkpoint shift officer");
+            }
+        }
+
+        // OVERLAP VALIDATION
+        List<OfficerShift> existingShifts =
+                officerShiftRepository.findByOfficerUidAndShiftDate(dto.getOfficerUid(), dto.getShiftDate());
+
+        for (OfficerShift existingShift : existingShifts) {
+            if (dto.getUid() == null || !existingShift.getUid().equals(dto.getUid())) {
+                if (isShiftOverlap(dto.getStartTime(), dto.getEndTime(),
+                        existingShift.getStartTime(), existingShift.getEndTime())) {
+                    return Response.error("Officer already has a conflicting shift on this date");
+                }
+            }
+        }
+
+        // Set fields
         shift.setOfficer(officerOpt.get());
         shift.setShiftDate(dto.getShiftDate());
-        shift.setShiftType(dto.getShiftType());
+        shift.setShiftTime(dto.getShiftTime());
+        shift.setShiftDutyType(dto.getShiftDutyType());
         shift.setDutyDescription(dto.getDutyDescription());
         shift.setIsPunishmentMode(dto.getIsPunishmentMode());
         shift.setStartTime(dto.getStartTime());
         shift.setEndTime(dto.getEndTime());
+        shift.setIsExcused(dto.getIsExcused());
+        shift.setExcuseReason(dto.getExcuseReason());
+        shift.setIsReassigned(dto.getIsReassigned());
 
         if (dto.getUid() != null) {
             shift.update();
@@ -64,12 +116,9 @@ public class OfficerShiftService {
 
         try {
             OfficerShift saved = officerShiftRepository.save(shift);
-            log.info("Saved shift for officer {} on {}", saved.getOfficer().getBadgeNumber(), saved.getShiftDate());
-            notifyShiftAssignment(shift);
-
+            notifyShiftAssignment(saved);
             return Response.success(saved);
         } catch (Exception e) {
-            log.error("Failed to save shift: {}", e.getMessage());
             return Response.error("Failed to save shift: " + Utils.getExceptionMessage(e));
         }
     }
@@ -136,7 +185,7 @@ public class OfficerShiftService {
         Optional<PoliceOfficer> officerOpt = policeOfficerRepository.findByUid(newOfficerUid);
         if (officerOpt.isEmpty()) return Response.error("New officer not found");
 
-        // Check for adjacent shifts (date-based)
+        // Adjacent shift rule
         boolean hasShiftBefore = officerShiftRepository.existsByOfficerUidAndShiftDate(newOfficerUid, shiftDate.minusDays(1));
         boolean hasShiftAfter = officerShiftRepository.existsByOfficerUidAndShiftDate(newOfficerUid, shiftDate.plusDays(1));
 
@@ -144,46 +193,46 @@ public class OfficerShiftService {
             return Response.error("This officer has adjacent shifts. Reassignment not allowed.");
         }
 
-        // Check for overlapping shifts on the same day
-        List<OfficerShift> existingShifts = officerShiftRepository.findByOfficerUidAndShiftDate(newOfficerUid, shiftDate);
+        // Overlap validation
+        List<OfficerShift> existingShifts =
+                officerShiftRepository.findByOfficerUidAndShiftDate(newOfficerUid, shiftDate);
+
         for (OfficerShift existingShift : existingShifts) {
-            if (isShiftOverlap(startTime, endTime, existingShift.getStartTime(), existingShift.getEndTime())) {
+            if (isShiftOverlap(startTime, endTime,
+                    existingShift.getStartTime(), existingShift.getEndTime())) {
                 return Response.error("This officer has a conflicting shift on the same day.");
             }
         }
 
-        // Step 1: Mark original shift as excused + reassigned
-        if(originalShift.getIsExcused()==true){
-            originalShift.setIsReassigned(true);
-            officerShiftRepository.save(originalShift);
-        }
-        else{
+        // Step 1: Mark original shift
+        if (!originalShift.getIsExcused()) {
             originalShift.setIsExcused(true);
-            originalShift.setIsReassigned(true);
-            officerShiftRepository.save(originalShift);
             notifyShiftExcuse(originalShift);
         }
+        originalShift.setIsReassigned(true);
+        officerShiftRepository.save(originalShift);
 
-        // Step 2: Create new shift for new officer
+        // Step 2: Create new shift
         OfficerShift newShift = new OfficerShift();
         newShift.setOfficer(officerOpt.get());
         newShift.setShiftDate(originalShift.getShiftDate());
-        newShift.setShiftType(originalShift.getShiftType());
+        newShift.setShiftTime(originalShift.getShiftTime());
+        newShift.setShiftDutyType(originalShift.getShiftDutyType());
         newShift.setDutyDescription(originalShift.getDutyDescription());
         newShift.setIsPunishmentMode(false);
         newShift.setReassignedFromUid(originalShift.getUid());
         newShift.setStartTime(startTime);
         newShift.setEndTime(endTime);
+
+        newShift.setCheckpoint(originalShift.getCheckpoint());
+
         newShift.update();
 
         try {
             OfficerShift saved = officerShiftRepository.save(newShift);
-            log.info("Reassigned shift from {} to {}", originalShift.getOfficer().getBadgeNumber(), saved.getOfficer().getBadgeNumber());
             notifyShiftReassignment(saved);
-
             return Response.success(saved);
         } catch (Exception e) {
-            log.error("Failed to save reassigned shift: {}", e.getMessage());
             return Response.error("Failed to reassign shift: " + Utils.getExceptionMessage(e));
         }
     }
@@ -242,7 +291,7 @@ public class OfficerShiftService {
             Optional<OfficerShift> currentShift = todayShifts.stream()
                     .filter(shift -> {
                         // Skip OFF shifts
-                        if ("OFF".equalsIgnoreCase(String.valueOf(shift.getShiftType())))
+                        if ("OFF".equalsIgnoreCase(String.valueOf(shift.getShiftDutyType())))
                             return false;
 
                         // Skip excused shifts
@@ -277,7 +326,7 @@ public class OfficerShiftService {
                 OfficerShift shift = currentShift.get();
                 log.info("Found officer on duty: {} ({})",
                         shift.getOfficer().getUserAccount().getName(),
-                        shift.getShiftType()
+                        shift.getShiftTime()
                 );
                 return Response.success(shift);
             }
@@ -310,7 +359,7 @@ public class OfficerShiftService {
             // Filter for officers currently on duty
             List<OfficerShift> onDutyShifts = todayShifts.stream()
                     .filter(shift -> {
-                        if ("OFF".equalsIgnoreCase(String.valueOf(shift.getShiftType()))) return false;
+                        if ("OFF".equalsIgnoreCase(String.valueOf(shift.getShiftDutyType()))) return false;
                         if (shift.getIsExcused() != null && shift.getIsExcused()) return false;
 
                         LocalTime startTime = shift.getStartTime();
@@ -378,5 +427,75 @@ public class OfficerShiftService {
         notificationService.sendNotification(notificationDto);
     }
 
+    public ResponseList<OfficerShift> assignCheckpointShiftBulk(BulkCheckpointShiftDto dto) {
+
+        if (dto == null) return new ResponseList<>("Data is required");
+        if (dto.getOfficerUids() == null || dto.getOfficerUids().isEmpty())
+            return new ResponseList<>("At least one officer is required");
+
+        if (dto.getCheckpointUid() == null)
+            return new ResponseList<>("Checkpoint is required");
+
+        Optional<TrafficCheckpoint> cpOpt = trafficCheckpointRepository.findByUid(dto.getCheckpointUid());
+        if (cpOpt.isEmpty()) return new ResponseList<>("Invalid checkpoint UID");
+
+        TrafficCheckpoint checkpoint = cpOpt.get();
+
+        List<OfficerShift> savedShifts = new ArrayList<>();
+
+        try {
+
+            for (String officerUid : dto.getOfficerUids()) {
+
+                Optional<PoliceOfficer> officerOpt = policeOfficerRepository.findByUid(officerUid);
+                if (officerOpt.isEmpty())
+                    return new ResponseList<>("Officer not found: " + officerUid);
+
+                PoliceOfficer officer = officerOpt.get();
+
+                PoliceOfficer supervisor = checkpoint.getSupervisingOfficer();
+                if (supervisor != null && supervisor.getUid().equals(officerUid)) {
+                    return new ResponseList<>("Supervisor cannot be assigned as a checkpoint shift officer");
+                }
+
+                // Overlap validation
+                List<OfficerShift> existingShifts =
+                        officerShiftRepository.findByOfficerUidAndShiftDate(officerUid, dto.getShiftDate());
+
+                for (OfficerShift existingShift : existingShifts) {
+                    if (isShiftOverlap(dto.getStartTime(), dto.getEndTime(),
+                            existingShift.getStartTime(), existingShift.getEndTime())) {
+                        return new ResponseList<>("Officer " + officer.getBadgeNumber() + " has a conflicting shift");
+                    }
+                }
+
+                // Create shift
+                OfficerShift shift = new OfficerShift();
+                shift.setOfficer(officer);
+                shift.setShiftDate(dto.getShiftDate());
+                shift.setShiftTime(dto.getShiftTime());
+                shift.setShiftDutyType(dto.getShiftDutyType());
+                shift.setStartTime(dto.getStartTime());
+                shift.setEndTime(dto.getEndTime());
+                shift.setCheckpoint(checkpoint);
+                shift.update();
+
+                OfficerShift saved = officerShiftRepository.save(shift);
+                savedShifts.add(saved);
+
+                notifyShiftAssignment(saved);
+            }
+
+            return new ResponseList<>(savedShifts);
+
+        } catch (Exception e) {
+            log.error("Failed to assign bulk checkpoint shifts: {}", e.getMessage());
+            return new ResponseList<>("Failed to assign checkpoint shifts: " + Utils.getExceptionMessage(e));
+        }
+    }
+
+    public ResponsePage<OfficerShift> getPoliceOfficerShiftsByCheckpoint(PageableParam pageableParam, String checkpointUid) {
+        return new ResponsePage<>(officerShiftRepository.getPoliceOfficerShiftsByCheckpoint(pageableParam.getPageable(true), pageableParam.getIsActive(), pageableParam.key(), checkpointUid));
+    }
 }
 
