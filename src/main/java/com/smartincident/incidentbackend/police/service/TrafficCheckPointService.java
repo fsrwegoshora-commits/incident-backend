@@ -274,4 +274,42 @@ public class TrafficCheckPointService {
                 )
         );
     }
+
+    public Response<TrafficCheckpoint> activateOrDeactivateCheckpoint(String checkpointUid) {
+        try {
+            if (checkpointUid == null || checkpointUid.trim().isEmpty()) {
+                return Response.error("Checkpoint UID is required");
+            }
+
+            Optional<TrafficCheckpoint> cpOpt = trafficCheckPointRepository.findByUid(checkpointUid);
+
+            if (cpOpt.isEmpty()) {
+                return Response.error("Checkpoint not found");
+            }
+
+            TrafficCheckpoint checkpoint = cpOpt.get();
+
+            boolean currentStatus = checkpoint.getActive();
+            log.info("🔍 Current status of '{}': {}", checkpoint.getName(), currentStatus);
+
+            boolean newStatus = !currentStatus;
+            checkpoint.setActive(newStatus);
+
+            log.info("🔄 Toggling checkpoint '{}' from {} to {}",
+                    checkpoint.getName(), currentStatus, newStatus);
+
+            TrafficCheckpoint saved = trafficCheckPointRepository.save(checkpoint);
+
+            boolean verifyStatus = saved.getActive();
+            log.info("✅ Checkpoint '{}' saved successfully - Status is now: {}",
+                    saved.getName(),
+                    verifyStatus ? "ACTIVE ✓" : "INACTIVE ✗");
+
+            return Response.success(saved);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.error("Failed to update checkpoint status: " + e.getMessage());
+        }
+    }
 }
