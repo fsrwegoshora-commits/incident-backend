@@ -271,7 +271,6 @@ public class OfficerShiftService {
             return Response.error("Station UID is required");
         }
 
-        // Verify station exists
         Optional<PoliceStation> stationOpt = policeStationRepository.findByUid(stationUid);
         if (!stationOpt.isPresent()) {
             return Response.error("Police station not found");
@@ -281,61 +280,100 @@ public class OfficerShiftService {
             LocalDate today = LocalDate.now();
             LocalTime currentTime = LocalTime.now();
 
-            log.info("Searching for shift on date: {} at time: {}", today, currentTime);
+            log.info("🔍 Searching for shift on date: {} at time: {}", today, currentTime);
 
-            // Find shift for today at this station
             List<OfficerShift> todayShifts = officerShiftRepository.findByStationAndDate(stationUid, today);
-            log.info("Found {} shifts for today", todayShifts.size());
+            log.info("📊 Found {} shifts for today at station: {}", todayShifts.size(), stationUid);
 
-            // Filter for current time and on-duty officers
+            // Log all shifts for debugging
+            todayShifts.forEach(shift -> {
+                log.debug("  - Shift: {} - {}, Type: {}, Officer: {}, Excused: {}",
+                        shift.getStartTime(),
+                        shift.getEndTime(),
+                        shift.getShiftDutyType(),
+                        shift.getOfficer() != null ? shift.getOfficer().getBadgeNumber() : "NULL",
+                        shift.getIsExcused()
+                );
+            });
+
             Optional<OfficerShift> currentShift = todayShifts.stream()
                     .filter(shift -> {
-                        // Skip OFF shifts
-                        if ("OFF".equalsIgnoreCase(String.valueOf(shift.getShiftDutyType())))
-                            return false;
-
-                        // Skip excused shifts
-                        if (shift.getIsExcused() != null && shift.getIsExcused()) {
+                        // ✅ Skip OFF shifts
+                        String dutyType = shift.getShiftDutyType() != null ?
+                                shift.getShiftDutyType().toString() : "";
+                        if ("OFF".equalsIgnoreCase(dutyType)) {
+                            log.debug("  ⏭️ Skipping OFF shift");
                             return false;
                         }
 
-                        // Check if current time is within shift hours
+                        // ✅ Skip excused shifts
+                        if (shift.getIsExcused() != null && shift.getIsExcused()) {
+                            log.debug("  ⏭️ Skipping excused shift");
+                            return false;
+                        }
+
+                        // ✅ Check if officer exists
+                        PoliceOfficer officer = shift.getOfficer();
+                        if (officer == null) {
+                            log.debug("  ⏭️ Skipping: No officer assigned");
+                            return false;
+                        }
+
+                        // ✅ Check times
                         LocalTime startTime = shift.getStartTime();
                         LocalTime endTime = shift.getEndTime();
 
                         if (startTime == null || endTime == null) {
+                            log.debug("  ⏭️ Skipping: Missing start or end time");
                             return false;
                         }
 
-                        // Check if officer is on duty
-                        PoliceOfficer officer = shift.getOfficer();
-                        if (officer == null ) {
-                            return false;
-                        }
+                        log.debug("  🕐 Checking shift: {} - {} vs current time: {}",
+                                startTime, endTime, currentTime);
 
-                        // Handle shifts that cross midnight
+                        // ✅ FIXED: Proper time check logic
+                        boolean isWithinShift;
+
                         if (endTime.isBefore(startTime)) {
-                            return !currentTime.isBefore(startTime) || !currentTime.isAfter(endTime);
+                            // Midnight crossing shift (e.g., 22:00 - 06:00)
+                            isWithinShift = currentTime.isAfter(startTime) || currentTime.isBefore(endTime);
+                            log.debug("    🌙 Midnight shift: {} (afterStart={}, beforeEnd={})",
+                                    isWithinShift,
+                                    currentTime.isAfter(startTime),
+                                    currentTime.isBefore(endTime)
+                            );
                         } else {
-                            return !currentTime.isBefore(startTime) && !currentTime.isAfter(endTime);
+                            // Normal shift (e.g., 08:00 - 16:00)
+                            isWithinShift = !currentTime.isBefore(startTime) && !currentTime.isAfter(endTime);
+                            log.debug("    ☀️ Normal shift: {} (afterStart={}, beforeEnd={})",
+                                    isWithinShift,
+                                    !currentTime.isBefore(startTime),
+                                    !currentTime.isAfter(endTime)
+                            );
                         }
+
+                        return isWithinShift;
                     })
                     .findFirst();
 
             if (currentShift.isPresent()) {
                 OfficerShift shift = currentShift.get();
-                log.info("Found officer on duty: {} ({})",
-                        shift.getOfficer().getUserAccount().getName(),
-                        shift.getShiftTime()
+                PoliceOfficer officer = shift.getOfficer();
+                String officerName = officer.getUserAccount().getName();
+
+                log.info("✅ FOUND officer on duty: {} ({}) at station: {}",
+                        officerName,
+                        officer.getBadgeNumber(),
+                        stationUid
                 );
                 return Response.success(shift);
             }
 
-            log.warn(" No officer currently on duty at this station");
+            log.warn("⚠️ No officer currently on duty at station: {} (time: {})", stationUid, currentTime);
             return Response.error("No officer currently on duty at this station");
 
         } catch (Exception e) {
-            log.error("Error finding current officer on duty: {}", e.getMessage());
+            log.error("❌ Error finding current officer on duty: {}", e.getMessage(), e);
             return Response.error("Failed to find current officer: " + e.getMessage());
         }
     }

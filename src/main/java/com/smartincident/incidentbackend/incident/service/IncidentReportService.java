@@ -117,13 +117,18 @@ public class IncidentReportService {
         try {
             incident = incidentRepository.save(incident);
             log.info("Incident created successfully: {}", incident.getUid());
+
             notifyIncidentCreation(incident);
-            assert officer != null;
-            notifyOfficerAssignment(incident, officer);
+
+            if (officer != null) {
+                notifyOfficerAssignment(incident, officer);
+            }
+
             return new Response<>(incident);
+
         } catch (Exception e) {
-            log.error("Failed to create incident: {}", e.getMessage());
-            return Response.error("Failed to report incident: " + Utils.getExceptionMessage(e));
+            log.error("Failed to create incident", e);
+            throw e;
         }
     }
 
