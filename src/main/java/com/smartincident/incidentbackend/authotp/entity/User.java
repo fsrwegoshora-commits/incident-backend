@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.entity.BaseEntity;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
+import com.smartincident.incidentbackend.setting.entity.Agency;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,6 +27,10 @@ public class User extends BaseEntity {
     private String name;
 
     private boolean verified = false;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "agency_id")
+    private Agency agency;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

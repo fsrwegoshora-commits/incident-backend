@@ -1,5 +1,6 @@
 package com.smartincident.incidentbackend.incident.dto;
 
+import com.smartincident.incidentbackend.enums.EmergencyLevel;
 import com.smartincident.incidentbackend.enums.IncidentStatus;
 import com.smartincident.incidentbackend.enums.IncidentType;
 import lombok.AllArgsConstructor;
@@ -7,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -42,4 +44,8 @@ public class IncidentReportDto {
     // Timestamps
     private LocalDateTime reportedAt;
     private LocalDateTime resolvedAt;
+
+    private String leadAgencyCode; // e.g., "POLICE" (default)
+    private EmergencyLevel emergencyLevel; // LOW, MEDIUM, HIGH, CRITICAL
+    private List<String> involvedAgencyCodes;
 }

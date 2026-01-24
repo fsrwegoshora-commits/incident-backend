@@ -3,6 +3,7 @@ package com.smartincident.incidentbackend.incident.entity;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.entity.BaseEntity;
 import com.smartincident.incidentbackend.enums.MessageType;
+import com.smartincident.incidentbackend.setting.entity.Agency;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -20,6 +21,10 @@ public class ChatMessage extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "incident_report_id", nullable = false)
     private IncidentReport relatedIncident;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "agency_id")
+    private Agency senderAgency;
 
     @Column(nullable = false)
     private String message;

@@ -3,10 +3,12 @@ package com.smartincident.incidentbackend.incident.entity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.entity.BaseEntity;
+import com.smartincident.incidentbackend.enums.EmergencyLevel;
 import com.smartincident.incidentbackend.enums.IncidentStatus;
 import com.smartincident.incidentbackend.enums.IncidentType;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
 import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
+import com.smartincident.incidentbackend.setting.entity.Agency;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -62,6 +64,10 @@ public class IncidentReport extends BaseEntity {
     private User reportedBy;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "lead_agency_id", nullable = false)
+    private Agency leadAgency;
+
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "police_station_id", nullable = false)
     private PoliceStation assignedStation;
 
@@ -75,9 +81,18 @@ public class IncidentReport extends BaseEntity {
     @Column
     private LocalDateTime resolvedAt;
 
+    @OneToMany(mappedBy = "incident", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
+    private List<IncidentAgency> involvedAgencies;
+
     @OneToMany(mappedBy = "relatedIncident", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore
     private List<ChatMessage> chatMessages;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private EmergencyLevel emergencyLevel;
+
 
     @Override
     public String toString() {
