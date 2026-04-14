@@ -1,159 +1,142 @@
 package com.smartincident.incidentbackend.authotp.service;
 
+import com.smartincident.incidentbackend.authotp.dto.AuthResponse;
 import com.smartincident.incidentbackend.authotp.entity.OtpCode;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.repository.OtpCodeRepository;
 import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.utils.Response;
-import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@GraphQLApi
 public class OtpService {
     private final OtpCodeRepository otpCodeRepository;
     private final UserRepository userRepository;
     private final JwtService jwtService;
 
+    @Value("${app.otp.expose-in-response:true}")
+    private boolean exposeOtpInResponse;
+
+    @Value("${app.otp.rate-limit-seconds:60}")
+    private long rateLimitSeconds;
+
+    // In-memory rate limiter: phone → last request timestamp (ms)
+    private final Map<String, Long> otpRequestTimes = new ConcurrentHashMap<>();
+
     @Transactional
     public Response<String> generateOtp(String phoneNumber) {
-        log.info("Generating OTP for phone number: {}", phoneNumber);
-
         if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
-            log.error("Phone number is null or empty");
             return Response.error("Phone number is required");
         }
 
-        String cleanedPhoneNumber = phoneNumber.trim();
+        String phone = phoneNumber.trim();
 
-        // Check if user exists
-        boolean userExists = userRepository.existsByPhoneNumberAndIsActiveTrue(cleanedPhoneNumber);
-        log.debug("User exists check for {}: {}", cleanedPhoneNumber, userExists);
+        if (!userRepository.existsByPhoneNumberAndIsActiveTrue(phone)) {
+            return Response.error("Phone number not registered");
+        }
 
-        if (!userExists) {
-            log.error("Phone number {} not registered", cleanedPhoneNumber);
-            return Response.error("Phone number not registered or deleted");
+        // Rate limiting
+        Long lastRequest = otpRequestTimes.get(phone);
+        if (lastRequest != null) {
+            long elapsed = System.currentTimeMillis() - lastRequest;
+            long rateLimitMs = rateLimitSeconds * 1000;
+            if (elapsed < rateLimitMs) {
+                long secondsLeft = (rateLimitMs - elapsed) / 1000 + 1;
+                return Response.error("Please wait " + secondsLeft + " seconds before requesting a new OTP");
+            }
         }
 
         try {
-            // Check existing OTPs first
-            List<OtpCode> existingOtps = otpCodeRepository.findAllByPhoneNumber(cleanedPhoneNumber);
-            log.debug("Found {} existing OTPs for {}", existingOtps.size(), cleanedPhoneNumber);
+            otpCodeRepository.deleteByPhoneNumber(phone);
 
-            // Delete existing OTPs
-            int deletedCount = otpCodeRepository.deleteByPhoneNumber(cleanedPhoneNumber);
-            log.debug("Deleted {} OTPs for {}", deletedCount, cleanedPhoneNumber);
-
-            // Generate new OTP
             String otp = String.valueOf(100000 + new Random().nextInt(900000));
-            LocalDateTime expiry = LocalDateTime.now().plusMinutes(2);
+            LocalDateTime expiry = LocalDateTime.now().plusMinutes(5);
 
-            OtpCode otpCode = new OtpCode(cleanedPhoneNumber, otp, expiry);
-            OtpCode savedOtp = otpCodeRepository.save(otpCode);
+            otpCodeRepository.save(new OtpCode(phone, otp, expiry));
+            otpRequestTimes.put(phone, System.currentTimeMillis());
 
-            log.info("OTP saved with ID: {} for phone number: {}", savedOtp.getId(), cleanedPhoneNumber);
-            log.info("Simulated SMS sent to {} with OTP: {}", cleanedPhoneNumber, otp);
+            log.info("OTP generated for: {}", phone);
 
-            return Response.success(otp);
+            // Send via SMS — wire up SmsService here when ready
+            // smsService.sendSms(phone, "Your verification code is: " + otp + ". Valid for 5 minutes.");
+
+            // Only expose OTP in response during development
+            String responseData = exposeOtpInResponse ? otp : "OTP sent to your phone";
+            return Response.success(responseData);
 
         } catch (Exception e) {
-            log.error("Failed to process OTP for phone number {}: {}", cleanedPhoneNumber, e.getMessage());
-            e.printStackTrace();
+            log.error("Failed to generate OTP for {}: {}", phone, e.getMessage());
             return Response.error("Failed to generate OTP");
         }
     }
 
     public Response<Boolean> verifyOtp(String phoneNumber, String code) {
         if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
-            log.error("Phone number is null or empty");
             return Response.error("Phone number is required");
         }
         if (code == null || code.trim().isEmpty()) {
-            log.error("OTP code is null or empty");
             return Response.error("OTP code is required");
         }
 
-        log.info("Verifying OTP for phone number: {}, code: {}", phoneNumber, code);
-        Optional<OtpCode> otpOpt = otpCodeRepository.findByPhoneNumberAndCode(phoneNumber, code);
+        Optional<OtpCode> otpOpt = otpCodeRepository.findByPhoneNumberAndCode(phoneNumber.trim(), code.trim());
         if (otpOpt.isEmpty()) {
-            log.warn("No OTP found for phone number: {}, code: {}", phoneNumber, code);
             return Response.error("Invalid OTP");
         }
 
         OtpCode otp = otpOpt.get();
         if (otp.getExpiresAt().isBefore(LocalDateTime.now())) {
-            log.warn("OTP expired for phone number: {}, code: {}", phoneNumber, code);
-            otpCodeRepository.delete(otp); // Clean up expired OTP
-            return Response.error("OTP is expired");
+            otpCodeRepository.delete(otp);
+            return Response.error("OTP has expired");
         }
 
-        Optional<User> optUser = userRepository.findByPhoneNumber(phoneNumber);
+        Optional<User> optUser = userRepository.findByPhoneNumber(phoneNumber.trim());
         if (optUser.isEmpty()) {
-            log.error("User not found for phone number: {}", phoneNumber);
-            return Response.error("User does not exist");
+            return Response.error("User not found");
         }
 
         User user = optUser.get();
         user.setVerified(true);
-        try {
-            userRepository.save(user);
-            log.info("User verified for phone number: {}", phoneNumber);
-        } catch (Exception e) {
-            log.error("Failed to save user verification for phone number {}: {}", phoneNumber, e.getMessage());
-            return Response.error("Failed to verify user");
-        }
-
-        try {
-            otpCodeRepository.delete(otp);
-            log.info("OTP deleted for phone number: {}", phoneNumber);
-        } catch (Exception e) {
-            log.error("Failed to delete OTP for phone number {}: {}", phoneNumber, e.getMessage());
-            // Continue, as user verification is already saved
-        }
+        userRepository.save(user);
+        otpCodeRepository.delete(otp);
+        otpRequestTimes.remove(phoneNumber.trim());
 
         return new Response<>(true);
     }
 
-    public String loginWithOtp(String phoneNumber, String code) {
-        if (phoneNumber == null || phoneNumber.trim().isEmpty()) {
-            log.error("Phone number is null or empty in loginWithOtp");
-        }
-        if (code == null || code.trim().isEmpty()) {
-            log.error("OTP code is null or empty in loginWithOtp");
-        }
-
-        log.info("Logging in with OTP for phone number: {}, code: {}", phoneNumber, code);
-
+    /**
+     * Verifies OTP and returns JWT access + refresh tokens.
+     * Throws RuntimeException with a descriptive message on any failure.
+     */
+    public AuthResponse loginWithOtp(String phoneNumber, String code) {
         Response<Boolean> otpResponse = verifyOtp(phoneNumber, code);
-        if (!otpResponse.success() || !otpResponse.getData()) {
-            log.warn("OTP verification failed for phone number: {}, message: {}", phoneNumber, otpResponse.getMessage());
-            return otpResponse.getMessage();
+        if (!otpResponse.success() || Boolean.FALSE.equals(otpResponse.getData())) {
+            throw new RuntimeException(otpResponse.getMessage());
         }
 
-        User user = userRepository.findByPhoneNumber(phoneNumber)
-                .orElseThrow(() -> {
-                    log.error("User not found after OTP verification for phone number: {}", phoneNumber);
-                    return new RuntimeException("User not found");
-                });
+        User user = userRepository.findByPhoneNumber(phoneNumber.trim())
+                .orElseThrow(() -> new RuntimeException("User not found"));
 
-        try {
-            String token = jwtService.generateToken(user);
-            log.info("JWT token generated for phone number: {}", phoneNumber);
-            return token;
-        } catch (Exception e) {
-            log.error("Failed to generate JWT token for phone number {}: {}", phoneNumber, e.getMessage());
-            return null;
-        }
+        String accessToken = jwtService.generateToken(user);
+        String refreshToken = jwtService.generateRefreshToken(user);
 
+        return new AuthResponse(
+                accessToken,
+                refreshToken,
+                user.getPhoneNumber(),
+                user.getRole(),
+                user.getStation() != null ? user.getStation().getUid() : null
+        );
     }
 }

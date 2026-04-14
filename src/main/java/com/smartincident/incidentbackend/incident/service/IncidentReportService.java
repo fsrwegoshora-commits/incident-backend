@@ -76,7 +76,7 @@ public class IncidentReportService {
         PoliceOfficer officer =null;
         if (dto.getAssignedOfficerUid() != null && !dto.getAssignedOfficerUid().isEmpty()) {
             Optional<PoliceOfficer> officerOpt = officerRepository.findByUid(dto.getAssignedOfficerUid());
-            if (!officerOpt.isPresent()) {
+            if (officerOpt.isEmpty()) {
                 return Response.error("Assigned officer not found");
             }
             officer = officerOpt.get();
@@ -89,7 +89,7 @@ public class IncidentReportService {
 
         // Get assigned station
         Optional<PoliceStation> stationOpt = stationRepository.findByUid(dto.getAssignedStationUid());
-        if (!stationOpt.isPresent()) {
+        if (stationOpt.isEmpty()) {
             return Response.error("Police station not found");
         }
         PoliceStation station = stationOpt.get();
@@ -105,7 +105,7 @@ public class IncidentReportService {
         incident.setImageUrl(dto.getImageUrl());
         incident.setAudioUrl(dto.getAudioUrl());
         incident.setVideoUrl(dto.getVideoUrl());
-        incident.setIsLiveCallRequested(dto.getIsLiveCallRequested());
+        incident.setIsLiveCallRequested(dto.getIsLiveCallRequested() != null && dto.getIsLiveCallRequested());
         incident.setStatus(IncidentStatus.PENDING);
         incident.setReportedBy(reporter);
         incident.setAssignedStation(station);
@@ -113,6 +113,8 @@ public class IncidentReportService {
             incident.setAssignedOfficer(officer);
         }
         incident.setReportedAt(LocalDateTime.now());
+        incident.setRequiresFireService(Boolean.TRUE.equals(dto.getRequiresFireService()));
+        incident.setRequiresMedicalService(Boolean.TRUE.equals(dto.getRequiresMedicalService()));
 
         try {
             incident = incidentRepository.save(incident);
@@ -142,7 +144,7 @@ public class IncidentReportService {
         }
 
         Optional<IncidentReport> incidentOpt = incidentRepository.findByUid(dto.getUid());
-        if (!incidentOpt.isPresent()) {
+        if (incidentOpt.isEmpty()) {
             return Response.error("Incident not found");
         }
 
@@ -169,6 +171,10 @@ public class IncidentReportService {
                 incident.setAssignedOfficer(officerOpt.get());
             }
         }
+        if (dto.getRequiresFireService() != null)
+            incident.setRequiresFireService(dto.getRequiresFireService());
+        if (dto.getRequiresMedicalService() != null)
+            incident.setRequiresMedicalService(dto.getRequiresMedicalService());
 
         incident.update();
 
@@ -190,12 +196,12 @@ public class IncidentReportService {
         log.info("Assigning officer {} to incident {}", officerUid, incidentUid);
 
         Optional<IncidentReport> incidentOpt = incidentRepository.findByUid(incidentUid);
-        if (!incidentOpt.isPresent()) {
+        if (incidentOpt.isEmpty()) {
             return Response.error("Incident not found");
         }
 
         Optional<PoliceOfficer> officerOpt = officerRepository.findByUid(officerUid);
-        if (!officerOpt.isPresent()) {
+        if (officerOpt.isEmpty()) {
             return Response.error("Officer not found");
         }
 
@@ -313,7 +319,7 @@ public class IncidentReportService {
         }
 
         Optional<IncidentReport> incidentOpt = incidentRepository.findByUid(uid);
-        if (!incidentOpt.isPresent()) {
+        if (incidentOpt.isEmpty()) {
             return Response.error("Incident not found");
         }
 

@@ -16,11 +16,13 @@ public interface UserRepository extends JpaRepository<User,Long> {
 
     Optional<User> findByPhoneNumber(String phoneNumber);
 
-    @Query("select u from User u where lower(concat(u.name,u.phoneNumber)) like %:key% and (:isActive is null or u.isActive=:isActive) and (:stationUid is null or u.station.uid=:stationUid)")
-    Page<User> findByKey(Pageable pageable, Boolean isActive, String key,String stationUid);
+    @Query(value = "select distinct u from User u left join fetch u.station s where lower(concat(u.name,u.phoneNumber)) like %:key% and (:isActive is null or u.isActive=:isActive) and (:stationUid is null or s.uid=:stationUid or exists (select o from PoliceOfficer o where o.userAccount=u and o.station.uid=:stationUid))",
+           countQuery = "select count(distinct u) from User u left join u.station s where lower(concat(u.name,u.phoneNumber)) like %:key% and (:isActive is null or u.isActive=:isActive) and (:stationUid is null or s.uid=:stationUid or exists (select o from PoliceOfficer o where o.userAccount=u and o.station.uid=:stationUid))")
+    Page<User> findByKey(Pageable pageable, Boolean isActive, String key, String stationUid);
 
-    @Query("select u from User u where lower(concat(u.name,u.phoneNumber)) like %:key% and (:isActive is null or u.isActive=:isActive) and u.station.uid = :stationUid")
-    Page<User> getUsersByStation(Pageable pageable, Boolean isActive, String key,String stationUid);
+    @Query(value = "select u from User u left join fetch u.station s where lower(concat(u.name,u.phoneNumber)) like %:key% and (:isActive is null or u.isActive=:isActive) and s.uid = :stationUid",
+           countQuery = "select count(u) from User u left join u.station s where lower(concat(u.name,u.phoneNumber)) like %:key% and (:isActive is null or u.isActive=:isActive) and s.uid = :stationUid")
+    Page<User> getUsersByStation(Pageable pageable, Boolean isActive, String key, String stationUid);
 
     List<User> findByRoleAndIsActiveTrue(Role role);
 

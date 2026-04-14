@@ -8,19 +8,16 @@ import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
 import com.smartincident.incidentbackend.police.repository.PoliceStationRepository;
 import com.smartincident.incidentbackend.utils.*;
-import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.Date;
 import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@GraphQLApi
 public class UserService {
     private final UserRepository userRepository;
     private final PoliceStationRepository policeStationRepository;
@@ -194,6 +191,44 @@ public class UserService {
         public ResponsePage<User> getUsersByStation(PageableParam pageableParam, String stationUid) {
             return new ResponsePage<>(userRepository.getUsersByStation(pageableParam.getPageable(true), pageableParam.getIsActive(), pageableParam.key(), stationUid));
         }
+
+    public Response<User> changeUserRole(String uid, Role newRole, String stationUid) {
+        if (uid == null)
+            return Response.error("User id is required");
+        if (newRole == null)
+            return Response.error("Role is required");
+
+        Optional<User> oUser = userRepository.findByUid(uid);
+        if (oUser.isEmpty())
+            return Response.error("User not found");
+
+        User user = oUser.get();
+
+        if (newRole == Role.POLICE_OFFICER || newRole == Role.STATION_ADMIN) {
+            if (stationUid == null)
+                return Response.error("Station is required for role " + newRole);
+            Optional<PoliceStation> stationOpt = policeStationRepository.findByUid(stationUid);
+            if (stationOpt.isEmpty())
+                return Response.error("Station not found");
+            user.setStation(stationOpt.get());
+        } else {
+            user.setStation(null);
+        }
+
+        user.setRole(newRole);
+        user.update();
+
+        try {
+            userRepository.save(user);
+            jwtService.invalidateAllUserTokens(user.getPhoneNumber());
+            log.info("Role changed to {} for user: {}", newRole, user.getPhoneNumber());
+        } catch (Exception e) {
+            log.error("Failed to change role: {}", e.getMessage());
+            return Response.error("Failed to change role: " + Utils.getExceptionMessage(e));
+        }
+
+        return Response.success(user);
+    }
 
     public Response<User> deleteOwnAccount(String phoneNumber, String currentToken) { // ADD currentToken PARAMETER
         Optional<User> oUser = userRepository.findByPhoneNumber(phoneNumber);

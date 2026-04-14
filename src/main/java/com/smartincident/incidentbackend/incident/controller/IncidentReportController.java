@@ -8,18 +8,14 @@ import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
 import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.enums.IncidentStatus;
 import com.smartincident.incidentbackend.utils.*;
-import io.leangen.graphql.annotations.GraphQLArgument;
-import io.leangen.graphql.annotations.GraphQLMutation;
-import io.leangen.graphql.annotations.GraphQLQuery;
-import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Controller
-@GraphQLApi
+@RestController
+@RequestMapping("/api/incidents")
 @RequiredArgsConstructor
 @Slf4j
 public class IncidentReportController {
@@ -27,85 +23,85 @@ public class IncidentReportController {
     private final IncidentReportService incidentService;
 
     @Authenticated
-    @GraphQLMutation(name = "createIncident", description = "Citizen reports a new incident")
-    public Response<IncidentReport> createIncident(@GraphQLArgument(name = "incidentDto") IncidentReportDto dto) {
+    @PostMapping
+    public Response<IncidentReport> createIncident(@RequestBody IncidentReportDto dto) {
         log.info("Creating incident: {}", dto.getTitle());
         return incidentService.createIncident(dto);
     }
 
-
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.POLICE_OFFICER})
-    @GraphQLMutation(name = "updateIncident", description = "Update incident details or status")
-    public Response<IncidentReport> updateIncident(@GraphQLArgument(name = "incidentDto") IncidentReportDto dto) {
+    @PutMapping
+    public Response<IncidentReport> updateIncident(@RequestBody IncidentReportDto dto) {
         log.info(" Updating incident: {}", dto.getUid());
         return incidentService.updateIncident(dto);
     }
 
-
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
-    @GraphQLMutation(name = "assignOfficerToIncident", description = "Assign officer to handle incident")
-    public Response<IncidentReport> assignOfficer(@GraphQLArgument(name = "incidentUid") String incidentUid, @GraphQLArgument(name = "officerUid") String officerUid) {
+    @PutMapping("/{incidentUid}/assign-officer/{officerUid}")
+    public Response<IncidentReport> assignOfficer(@PathVariable String incidentUid, @PathVariable String officerUid) {
         log.info(" Assigning officer to incident");
         return incidentService.assignOfficer(incidentUid, officerUid);
     }
 
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.CITIZEN})
-    @GraphQLMutation(name = "deleteIncident", description = "Delete an incident")
-    public Response<IncidentReport> deleteIncident(@GraphQLArgument(name = "uid") String uid) {
+    @DeleteMapping("/{uid}")
+    public Response<IncidentReport> deleteIncident(@PathVariable String uid) {
         log.info(" Deleting incident: {}", uid);
         return incidentService.deleteIncident(uid);
     }
 
     @Authenticated
-    @GraphQLQuery(name = "getIncident", description = "Get incident by UID")
-    public Response<IncidentReport> getIncident(@GraphQLArgument(name = "uid") String uid) {
+    @GetMapping("/{uid}")
+    public Response<IncidentReport> getIncident(@PathVariable String uid) {
         return incidentService.getIncident(uid);
     }
 
     @Authenticated
-    @GraphQLQuery(name = "getMyIncidents", description = "Get all incidents reported by current user")
-    public ResponsePage<IncidentReport> getMyIncidents(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam) {
+    @GetMapping("/my")
+    public ResponsePage<IncidentReport> getMyIncidents(@ModelAttribute PageableParam pageableParam) {
         log.info(" Getting my incidents");
         return incidentService.getMyIncidents(pageableParam);
     }
 
-
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
-    @GraphQLQuery(name = "getStationIncidents", description = "Get all incidents for a police station")
-    public ResponsePage<IncidentReport> getStationIncidents(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam, @GraphQLArgument(name = "status") IncidentStatus status) {
+    @GetMapping("/station")
+    public ResponsePage<IncidentReport> getStationIncidents(
+            @ModelAttribute PageableParam pageableParam,
+            @RequestParam(required = false) IncidentStatus status) {
         log.info(" Getting station incidents");
         return incidentService.getStationIncidents(pageableParam, status);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.POLICE_OFFICER,Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLQuery(name = "getOfficerIncidents", description = "Get incidents assigned to current officer")
-    public ResponsePage<IncidentReport> getOfficerIncidents(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam, @GraphQLArgument(name = "status") IncidentStatus status) {
+    @AuthorizedRole({Role.POLICE_OFFICER, Role.STATION_ADMIN, Role.ROOT})
+    @GetMapping("/officer")
+    public ResponsePage<IncidentReport> getOfficerIncidents(
+            @ModelAttribute PageableParam pageableParam,
+            @RequestParam(required = false) IncidentStatus status) {
         log.info(" Getting officer incidents");
         return incidentService.getOfficerIncidents(pageableParam, status);
     }
 
     @Authenticated
     @AuthorizedRole({Role.POLICE_OFFICER, Role.STATION_ADMIN, Role.ROOT})
-    @GraphQLQuery(name = "getNearbyIncidents", description = "Get incidents near a location")
+    @GetMapping("/nearby")
     public Response<List<IncidentReport>> getNearbyIncidents(
-            @GraphQLArgument(name = "latitude") Double latitude,
-            @GraphQLArgument(name = "longitude") Double longitude,
-            @GraphQLArgument(name = "radiusKm") Double radiusKm,
-            @GraphQLArgument(name = "status") IncidentStatus status
-    ) {
+            @RequestParam Double latitude,
+            @RequestParam Double longitude,
+            @RequestParam Double radiusKm,
+            @RequestParam(required = false) IncidentStatus status){
         log.info(" Getting nearby incidents");
         return incidentService.getNearbyIncidents(latitude, longitude, radiusKm, status);
     }
 
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
-    @GraphQLQuery(name = "getIncidentStats", description = "Get incident statistics for station")
-    public Response<IncidentReportService.IncidentStats> getIncidentStats(@GraphQLArgument(name = "stationUid") String stationUid){
+    @GetMapping("/stats")
+    public Response<IncidentReportService.IncidentStats> getIncidentStats(@RequestParam(required = false) String stationUid) {
         return incidentService.getStationStats(stationUid);
     }
 }

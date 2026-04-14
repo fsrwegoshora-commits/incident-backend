@@ -1,5 +1,6 @@
 package com.smartincident.incidentbackend.police.dto;
 
+import com.smartincident.incidentbackend.enums.StationLevel;
 import io.leangen.graphql.annotations.GraphQLInputField;
 import io.leangen.graphql.annotations.types.GraphQLType;
 import lombok.AllArgsConstructor;
@@ -23,9 +24,15 @@ public class PoliceStationDto {
     @GraphQLInputField(name = "contactInfo", description = "Contact information")
     private String contactInfo;
 
-    @GraphQLInputField(name = "administrativeAreaUid", description = "area information")
+    @GraphQLInputField(name = "administrativeAreaUid", description = "Administrative area UID")
     private String administrativeAreaUid;
 
     @GraphQLInputField(name = "location", description = "Location details")
     private LocationDto location;
+
+    @GraphQLInputField(name = "level", description = "Station hierarchy level")
+    private StationLevel level;
+
+    @GraphQLInputField(name = "parentStationUid", description = "UID of the parent station (required for all levels except NATIONAL_HQ)")
+    private String parentStationUid;
 }

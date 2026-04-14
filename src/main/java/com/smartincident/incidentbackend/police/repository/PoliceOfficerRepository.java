@@ -18,10 +18,22 @@ public interface PoliceOfficerRepository extends JpaRepository<PoliceOfficer,Lon
     select p from PoliceOfficer p
     where lower(concat(p.userAccount.name, p.userAccount.phoneNumber)) like %:key%
       and (:isActive is null or p.isActive = :isActive) and (:stationUid is null or p.station.uid=:stationUid)
+    order by case p.code
+      when 'ISP'   then 1 when 'A_ISP' then 2 when 'SM'    then 3
+      when 'S_SGT' then 4 when 'SGT'   then 5 when 'CPL'   then 6
+      when 'PC'    then 7 else 8 end asc
     """)
-    Page<PoliceOfficer> getPoliceOfficers(Pageable pageable, Boolean isActive, String key,String stationUid);
+    Page<PoliceOfficer> getPoliceOfficers(Pageable pageable, Boolean isActive, String key, String stationUid);
 
-    @Query("select p from PoliceOfficer p where lower(concat(p.userAccount.name, p.userAccount.phoneNumber)) like %:key% and (:isActive is null or p.isActive=:isActive) and p.station.uid=:stationUid")
+    @Query("""
+    select p from PoliceOfficer p
+    where lower(concat(p.userAccount.name, p.userAccount.phoneNumber)) like %:key%
+      and (:isActive is null or p.isActive=:isActive) and p.station.uid=:stationUid
+    order by case p.code
+      when 'ISP'   then 1 when 'A_ISP' then 2 when 'SM'    then 3
+      when 'S_SGT' then 4 when 'SGT'   then 5 when 'CPL'   then 6
+      when 'PC'    then 7 else 8 end asc
+    """)
     Page<PoliceOfficer> getPoliceOfficersByStation(Pageable pageable, Boolean isActive, String key, String stationUid);
 
     @Query("select p from PoliceOfficer p where p.userAccount.uid = :userUid and p.isActive=true")
@@ -31,6 +43,13 @@ public interface PoliceOfficerRepository extends JpaRepository<PoliceOfficer,Lon
 
     List<PoliceOfficer> findByIsActiveTrue();
 
+    @Query("""
+    select p from PoliceOfficer p where p.station.uid=:stationUid and p.isActive=true
+    order by case p.code
+      when 'ISP'   then 1 when 'A_ISP' then 2 when 'SM'    then 3
+      when 'S_SGT' then 4 when 'SGT'   then 5 when 'CPL'   then 6
+      when 'PC'    then 7 else 8 end asc
+    """)
     List<PoliceOfficer> findByStationUidAndIsActiveTrue(String stationUid);
 
     PoliceOfficer findByUserAccount(User user);

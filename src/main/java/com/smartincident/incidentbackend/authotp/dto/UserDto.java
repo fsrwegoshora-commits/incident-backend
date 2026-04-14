@@ -3,7 +3,6 @@ package com.smartincident.incidentbackend.authotp.dto;
 import com.smartincident.incidentbackend.enums.OfficerRank;
 import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.police.dto.OfficerShiftDto;
-import io.leangen.graphql.annotations.GraphQLQuery;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -30,7 +29,6 @@ public class UserDto {
     private Boolean isOnDuty;
     private OfficerShiftDto currentShift;
 
-    @GraphQLQuery(name = "officerUid")
     private String officerUid;
 
 }

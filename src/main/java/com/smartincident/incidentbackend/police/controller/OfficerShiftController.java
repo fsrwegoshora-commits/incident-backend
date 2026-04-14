@@ -11,96 +11,102 @@ import com.smartincident.incidentbackend.utils.PageableParam;
 import com.smartincident.incidentbackend.utils.Response;
 import com.smartincident.incidentbackend.utils.ResponseList;
 import com.smartincident.incidentbackend.utils.ResponsePage;
-import io.leangen.graphql.annotations.GraphQLArgument;
-import io.leangen.graphql.annotations.GraphQLMutation;
-import io.leangen.graphql.annotations.GraphQLQuery;
-import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
 
-@Controller
-@GraphQLApi
+@RestController
+@RequestMapping("/api/police/shifts")
 @RequiredArgsConstructor
 public class OfficerShiftController {
     private final OfficerShiftService officerShiftService;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLMutation(name = "saveShift", description = "New police officer shift")
-    public Response<OfficerShift> saveShift(@GraphQLArgument(name = "policeOfficerDto") OfficerShiftDto officerShiftDto) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @PostMapping
+    public Response<OfficerShift> saveShift(@RequestBody OfficerShiftDto officerShiftDto) {
         return officerShiftService.saveShift(officerShiftDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLMutation(name = "excuseShift", description = "save shift excuse")
-    public Response<OfficerShift> excuseShift(@GraphQLArgument(name = "policeOfficerDto") String shitUid,@GraphQLArgument(name="reason") String reason) {
-        return officerShiftService.excuseShift(shitUid,reason);
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @PutMapping("/{uid}/excuse")
+    public Response<OfficerShift> excuseShift(@PathVariable String uid, @RequestParam String reason) {
+        return officerShiftService.excuseShift(uid, reason);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLMutation(name = "deleteOfficerShift", description = "Deletes a police officer shift using it's uid")
-    public Response<OfficerShift> deleteOfficerShift(@GraphQLArgument(name = "uid") String uid) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @DeleteMapping("/{uid}")
+    public Response<OfficerShift> deleteOfficerShift(@PathVariable String uid) {
         return officerShiftService.deleteOfficerShift(uid);
     }
+
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLMutation(name = "reassignShift", description = "save shift reassign")
-    public Response<OfficerShift> reassignShift(@GraphQLArgument(name = "policeOfficerDto") String shitUid,@GraphQLArgument(name="newOfficerUid") String newOfficerUid) {
-        return officerShiftService.reassignShift(shitUid,newOfficerUid);
-    }
-    @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLQuery(name = "getPoliceOfficerShiftsByCheckpoint", description = "Gets a page of police officer shift")
-    public ResponsePage<OfficerShift> getPoliceOfficerShiftsByCheckpoint(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam,@GraphQLArgument(name = "checkpointUid") String checkpointUid) {
-        return officerShiftService.getPoliceOfficerShiftsByCheckpoint(pageableParam != null ? pageableParam : new PageableParam(),checkpointUid);
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @PutMapping("/{uid}/reassign/{newOfficerUid}")
+    public Response<OfficerShift> reassignShift(@PathVariable String uid, @PathVariable String newOfficerUid) {
+        return officerShiftService.reassignShift(uid, newOfficerUid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLQuery(name = "getPoliceOfficerShifts", description = "Gets a page of police officer shift")
-    public ResponsePage<OfficerShift> getPoliceOfficerShifts(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @GetMapping("/checkpoint/{checkpointUid}")
+    public ResponsePage<OfficerShift> getPoliceOfficerShiftsByCheckpoint(
+            @ModelAttribute PageableParam pageableParam,
+            @PathVariable String checkpointUid) {
+        return officerShiftService.getPoliceOfficerShiftsByCheckpoint(pageableParam != null ? pageableParam : new PageableParam(), checkpointUid);
+    }
+
+    @Authenticated
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @GetMapping
+    public ResponsePage<OfficerShift> getPoliceOfficerShifts(@ModelAttribute PageableParam pageableParam) {
         return officerShiftService.getPoliceOfficerShifts(pageableParam != null ? pageableParam : new PageableParam());
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT,Role.POLICE_OFFICER})
-    @GraphQLQuery(name = "getPoliceOfficerShift", description = "Gets a police officer shift using it's uid")
-    public Response<OfficerShift> getPoliceOfficerShift(@GraphQLArgument(name = "uid") String uid) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.POLICE_OFFICER})
+    @GetMapping("/{uid}")
+    public Response<OfficerShift> getPoliceOfficerShift(@PathVariable String uid) {
         return officerShiftService.getPoliceOfficerShift(uid);
     }
+
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLQuery(name = "getShiftsByStation", description = "Gets a page of Officer Shift")
-    public ResponsePage<OfficerShift> getShiftsByStation(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam, @GraphQLArgument(name = "policeStationUid") String policeStationUid) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @GetMapping("/station/{policeStationUid}")
+    public ResponsePage<OfficerShift> getShiftsByStation(
+            @ModelAttribute PageableParam pageableParam,
+            @PathVariable String policeStationUid) {
         return officerShiftService.getShiftsByStation(pageableParam != null ? pageableParam : new PageableParam(), policeStationUid);
     }
+
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT,Role.POLICE_OFFICER})
-    @GraphQLQuery(name = "getShiftsByPoliceOfficer", description = "Gets a page of Officer Shift")
-    public ResponsePage<OfficerShift> getShiftsByPoliceOfficer(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam, @GraphQLArgument(name = "policeOfficerUid") String policeOfficerUid) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.POLICE_OFFICER})
+    @GetMapping("/officer/{policeOfficerUid}")
+    public ResponsePage<OfficerShift> getShiftsByPoliceOfficer(
+            @ModelAttribute PageableParam pageableParam,
+            @PathVariable String policeOfficerUid) {
         return officerShiftService.getShiftsByPoliceOfficer(pageableParam != null ? pageableParam : new PageableParam(), policeOfficerUid);
     }
 
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.CITIZEN, Role.POLICE_OFFICER})
-    @GraphQLQuery(name = "getCurrentOfficerOnDuty", description = "Gets the officer currently on duty at a station")
-    public Response<OfficerShift> getCurrentOfficerOnDuty(@GraphQLArgument(name = "stationUid") String stationUid) {
+    @GetMapping("/on-duty/{stationUid}")
+    public Response<OfficerShift> getCurrentOfficerOnDuty(@PathVariable String stationUid) {
         return officerShiftService.getCurrentOfficerOnDuty(stationUid);
     }
 
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
-    @GraphQLQuery(name = "getAllOfficersOnDutyNow", description = "Gets all officers currently on duty")
-    public ResponseList<OfficerShift> getAllOfficersOnDutyNow(@GraphQLArgument(name = "stationUid") String stationUid) {
+    @GetMapping("/on-duty/all/{stationUid}")
+    public ResponseList<OfficerShift> getAllOfficersOnDutyNow(@PathVariable String stationUid) {
         return officerShiftService.getAllOfficersOnDutyNow(stationUid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLMutation(name = "assignCheckpointShiftBulk", description = "New police officer check point shift")
-    public ResponseList<OfficerShift> assignCheckpointShiftBulk(@GraphQLArgument(name = "bulkCheckpointShiftDto") BulkCheckpointShiftDto bulkCheckpointShiftDto) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @PostMapping("/checkpoint/bulk")
+    public ResponseList<OfficerShift> assignCheckpointShiftBulk(@RequestBody BulkCheckpointShiftDto bulkCheckpointShiftDto) {
         return officerShiftService.assignCheckpointShiftBulk(bulkCheckpointShiftDto);
     }
 }

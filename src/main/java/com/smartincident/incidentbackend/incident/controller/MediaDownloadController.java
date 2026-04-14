@@ -2,22 +2,19 @@ package com.smartincident.incidentbackend.incident.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
 import com.smartincident.incidentbackend.utils.Response;
-import io.leangen.graphql.annotations.GraphQLArgument;
-import io.leangen.graphql.annotations.GraphQLQuery;
-import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-@Controller
-@GraphQLApi
+@RestController
+@RequestMapping("/api/media")
 @RequiredArgsConstructor
 @Slf4j
 public class MediaDownloadController {
@@ -26,36 +23,30 @@ public class MediaDownloadController {
     private String uploadDir;
 
     @Authenticated
-    @GraphQLQuery(name = "downloadMedia", description = "Download media file as base64")
-    public Response<MediaDownloadResponse> downloadMedia(
-            @GraphQLArgument(name = "fileUrl") String fileUrl) {
+    @GetMapping("/download")
+    public Response<MediaDownloadResponse> downloadMedia(@RequestParam String fileUrl) {
 
-        log.info("📥 Downloading media file: {}", fileUrl);
+        log.info("Downloading media file: {}", fileUrl);
 
         try {
-            // Extract filename from URL
             String filename = extractFilenameFromUrl(fileUrl);
             if (filename == null) {
                 return Response.error("Invalid file URL");
             }
 
-            // Determine media type from filename
             String mediaType = determineMediaType(filename);
             String subfolder = mediaType.toLowerCase() + "s";
 
-            // Build file path
             Path filePath = Paths.get(uploadDir, subfolder, filename);
 
             if (!Files.exists(filePath)) {
-                log.error("❌ File not found: {}", filePath);
+                log.error("File not found: {}", filePath);
                 return Response.error("File not found");
             }
 
-            // Read file and encode as base64
             byte[] fileBytes = Files.readAllBytes(filePath);
             String base64Data = java.util.Base64.getEncoder().encodeToString(fileBytes);
 
-            // Create data URL
             String mimeType = getMimeType(filename);
             String dataUrl = "data:" + mimeType + ";base64," + base64Data;
 
@@ -66,25 +57,24 @@ public class MediaDownloadController {
             response.setBase64Data(dataUrl);
             response.setMimeType(mimeType);
 
-            log.info("✅ Media downloaded successfully: {} ({} bytes)", filename, fileBytes.length);
+            log.info("Media downloaded successfully: {} ({} bytes)", filename, fileBytes.length);
 
             return Response.success(response);
 
         } catch (IOException e) {
-            log.error("❌ Failed to download media: {}", e.getMessage());
+            log.error("Failed to download media: {}", e.getMessage());
             return Response.error("Failed to download media: " + e.getMessage());
         } catch (Exception e) {
-            log.error("❌ Unexpected error during download: {}", e.getMessage());
+            log.error("Unexpected error during download: {}", e.getMessage());
             return Response.error("Unexpected error: " + e.getMessage());
         }
     }
 
     @Authenticated
-    @GraphQLQuery(name = "getMediaInfo", description = "Get media file information")
-    public Response<MediaInfoResponse> getMediaInfo(
-            @GraphQLArgument(name = "fileUrl") String fileUrl) {
+    @GetMapping("/info")
+    public Response<MediaInfoResponse> getMediaInfo(@RequestParam String fileUrl) {
 
-        log.info("📋 Getting media info: {}", fileUrl);
+        log.info("Getting media info: {}", fileUrl);
 
         try {
             String filename = extractFilenameFromUrl(fileUrl);
@@ -113,7 +103,7 @@ public class MediaDownloadController {
             return Response.success(response);
 
         } catch (Exception e) {
-            log.error("❌ Error getting media info: {}", e.getMessage());
+            log.error("Error getting media info: {}", e.getMessage());
             return Response.error("Error getting media info: " + e.getMessage());
         }
     }
@@ -122,8 +112,6 @@ public class MediaDownloadController {
         if (fileUrl == null || fileUrl.trim().isEmpty()) {
             return null;
         }
-
-        // Handle both full URLs and relative paths
         String[] parts = fileUrl.split("/");
         return parts.length > 0 ? parts[parts.length - 1] : null;
     }

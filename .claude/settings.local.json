@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dart --version)",
+      "Bash(dart migrate.dart)",
+      "Bash(flutter pub:*)"
+    ]
+  }
+}

@@ -10,66 +10,65 @@ import com.smartincident.incidentbackend.police.repository.OfficerShiftRepositor
 import com.smartincident.incidentbackend.police.repository.PoliceOfficerRepository;
 import com.smartincident.incidentbackend.police.service.PoliceOfficerService;
 import com.smartincident.incidentbackend.utils.*;
-import io.leangen.graphql.annotations.GraphQLArgument;
-import io.leangen.graphql.annotations.GraphQLMutation;
-import io.leangen.graphql.annotations.GraphQLQuery;
-import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Controller;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
-@Controller
+@RestController
+@RequestMapping("/api/police/officers")
 @RequiredArgsConstructor
-@GraphQLApi
-@Component
 public class PoliceOfficerController {
     private final PoliceOfficerService policeOfficerService;
     private final PoliceOfficerRepository policeOfficerRepository;
     private final OfficerShiftRepository officerShiftRepository;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLMutation(name = "savePoliceOfficer", description = "New police officer")
-    public Response<PoliceOfficer> savePoliceOfficer(@GraphQLArgument(name = "policeOfficerDto") PoliceOfficerDto policeOfficerDto) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @PostMapping
+    public Response<PoliceOfficer> savePoliceOfficer(@RequestBody PoliceOfficerDto policeOfficerDto) {
         return policeOfficerService.savePoliceOfficer(policeOfficerDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLQuery(name = "getPoliceOfficer", description = "Gets a police police using it's uid")
-    public Response<PoliceOfficer> getPoliceOfficer(@GraphQLArgument(name = "uid") String uid) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @GetMapping("/{uid}")
+    public Response<PoliceOfficer> getPoliceOfficer(@PathVariable String uid) {
         return policeOfficerService.getPoliceOfficer(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLMutation(name = "deletePoliceOfficer", description = "Deletes a police Officer using it's uid")
-    public Response<PoliceOfficer> deletePoliceOfficer(@GraphQLArgument(name = "uid") String uid) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @DeleteMapping("/{uid}")
+    public Response<PoliceOfficer> deletePoliceOfficer(@PathVariable String uid) {
         return policeOfficerService.deletePoliceOfficer(uid);
     }
 
     @Authenticated
     @AuthorizedRole({Role.ROOT})
-    @GraphQLQuery(name = "getPoliceOfficers", description = "Gets a page of police officer")
-    public ResponsePage<PoliceOfficer> getPoliceOfficers(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam) {
+    @GetMapping
+    public ResponsePage<PoliceOfficer> getPoliceOfficers(@ModelAttribute PageableParam pageableParam) {
         return policeOfficerService.getPoliceOfficers(pageableParam != null ? pageableParam : new PageableParam());
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLQuery(name = "getPoliceOfficersByStation", description = "Gets a page of police officer")
-    public ResponsePage<PoliceOfficer> getPoliceOfficersByStation(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam, @GraphQLArgument(name = "policeStationUid") String policeStationUid) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @GetMapping("/by-station/{policeStationUid}")
+    public ResponsePage<PoliceOfficer> getPoliceOfficersByStation(
+            @ModelAttribute PageableParam pageableParam,
+            @PathVariable String policeStationUid) {
         return policeOfficerService.getPoliceOfficersByStation(pageableParam != null ? pageableParam : new PageableParam(), policeStationUid);
     }
-    @GraphQLQuery(name = "getAvailableOfficersForDate")
+
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
-    public ResponseList<PoliceOfficer> getAvailableOfficersForDate(@GraphQLArgument(name = "date") LocalDate date) {
+    @GetMapping("/available/date")
+    public ResponseList<PoliceOfficer> getAvailableOfficersForDate(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         if (date == null) return ResponseList.error("Date is required");
 
         String stationUid = LoggedUser.getStationUid();
@@ -91,15 +90,13 @@ public class PoliceOfficerController {
         return new ResponseList<>(available);
     }
 
-
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
-    @GraphQLQuery(name = "getAvailableOfficersForSlot")
+    @GetMapping("/available/slot")
     public ResponseList<PoliceOfficer> getAvailableOfficersForSlot(
-            @GraphQLArgument(name = "date") String date,
-            @GraphQLArgument(name = "startTime") String startTime,
-            @GraphQLArgument(name = "endTime") String endTime
-    ) {
+            @RequestParam String date,
+            @RequestParam String startTime,
+            @RequestParam String endTime) {
         if (date == null || startTime == null || endTime == null) {
             return ResponseList.error("Date and time range are required");
         }
@@ -128,6 +125,4 @@ public class PoliceOfficerController {
 
         return new ResponseList<>(available);
     }
-
-
 }

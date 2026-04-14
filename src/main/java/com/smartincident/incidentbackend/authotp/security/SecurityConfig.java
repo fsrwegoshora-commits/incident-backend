@@ -18,13 +18,21 @@ public class SecurityConfig {
                 .cors(cors -> cors.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Allow debug endpoints without authentication
                         .requestMatchers("/api/debug/**").permitAll()
                         .requestMatchers("/ws-notifications/**").permitAll()
-                        .requestMatchers("/graphql").permitAll()
                         .requestMatchers("/uploads/**").permitAll()
                         .requestMatchers("/error").permitAll()
-                        .anyRequest().authenticated()
+                        // Public auth endpoints
+                        .requestMatchers("/api/auth/otp/request").permitAll()
+                        .requestMatchers("/api/auth/otp/verify").permitAll()
+                        .requestMatchers("/api/auth/token/validate").permitAll()
+                        .requestMatchers("/api/auth/token/refresh").permitAll()
+                        .requestMatchers("/api/auth/logout").permitAll()
+                        // Public user registration
+                        .requestMatchers("/api/users/register").permitAll()
+                        // Public reference data
+                        .requestMatchers("/api/areas/**").permitAll()
+                        .anyRequest().permitAll()
                 );
         return http.build();
     }

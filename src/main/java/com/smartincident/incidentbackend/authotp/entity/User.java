@@ -1,6 +1,6 @@
 package com.smartincident.incidentbackend.authotp.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.entity.BaseEntity;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
@@ -36,9 +36,9 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private Role role = Role.CITIZEN;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "station_id")
-    @JsonIgnore
+    @JsonIgnoreProperties({"parentStation", "policeStationLocation", "temporaryDistance"})
     private PoliceStation station;
 
 

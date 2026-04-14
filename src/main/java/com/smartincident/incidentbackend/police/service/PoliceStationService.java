@@ -1,5 +1,6 @@
 package com.smartincident.incidentbackend.police.service;
 
+import com.smartincident.incidentbackend.enums.StationLevel;
 import com.smartincident.incidentbackend.police.dto.PoliceStationDto;
 import com.smartincident.incidentbackend.police.entity.Location;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
@@ -26,67 +27,68 @@ public class PoliceStationService {
     private final PoliceStationRepository policeStationRepository;
     private final AdministrativeAreaRepository administrativeAreaRepository;
 
-    public Response<PoliceStation> savePoliceStation(PoliceStationDto policeStationDto) {
-        if (policeStationDto == null)
+    public Response<PoliceStation> savePoliceStation(PoliceStationDto dto) {
+        if (dto == null)
             return Response.error("Police station is required");
-        if (policeStationDto.getName() == null)
+        if (dto.getName() == null)
             return Response.error("Police station name is required");
-        if (policeStationDto.getContactInfo() == null)
+        if (dto.getContactInfo() == null)
             return Response.error("Contact information is required");
-        if (policeStationDto.getAdministrativeAreaUid() == null)
+        if (dto.getAdministrativeAreaUid() == null)
             return Response.error("Administrative area is required");
-        // Validation ya Location
-        if (policeStationDto.getLocation() == null)
+        if (dto.getLocation() == null)
             return Response.error("Location is required");
-        if (policeStationDto.getLocation().getLatitude() == null || policeStationDto.getLocation().getLongitude() == null)
+        if (dto.getLocation().getLatitude() == null || dto.getLocation().getLongitude() == null)
             return Response.error("Latitude and longitude are required");
+
+        StationLevel level = dto.getLevel() != null ? dto.getLevel() : StationLevel.POLICE_STATION;
+
+        // Every level except NATIONAL_HQ must have a parent
+        if (level != StationLevel.NATIONAL_HQ && dto.getParentStationUid() == null)
+            return Response.error("Parent station is required for all station levels except National HQ");
 
         PoliceStation policeStation;
 
-        if (policeStationDto.getUid() != null) {
-            Optional<PoliceStation> oPoliceStation = policeStationRepository.findByUid(policeStationDto.getUid());
-            if (!oPoliceStation.isPresent())
+        if (dto.getUid() != null) {
+            Optional<PoliceStation> oPoliceStation = policeStationRepository.findByUid(dto.getUid());
+            if (oPoliceStation.isEmpty())
                 return Response.error("Invalid police station provided");
 
             policeStation = oPoliceStation.get();
-            policeStation.setName(policeStationDto.getName());
-            policeStation.setContactInfo(policeStationDto.getContactInfo());
+            policeStation.setName(dto.getName());
+            policeStation.setContactInfo(dto.getContactInfo());
+            policeStation.setLevel(level);
 
-            // Update AdministrativeArea
-            AdministrativeArea area = administrativeAreaRepository.findByUid(policeStationDto.getAdministrativeAreaUid())
+            AdministrativeArea area = administrativeAreaRepository.findByUid(dto.getAdministrativeAreaUid())
                     .orElseThrow(() -> new RuntimeException("Invalid administrative area"));
             policeStation.setPoliceStationLocation(area);
 
-            // Update Location
-            Location location = new Location(
-                    policeStationDto.getLocation().getLatitude(),
-                    policeStationDto.getLocation().getLongitude(),
-                    policeStationDto.getLocation().getAddress()
-            );
-            policeStation.setLocation(location);
+            policeStation.setLocation(new Location(
+                    dto.getLocation().getLatitude(),
+                    dto.getLocation().getLongitude(),
+                    dto.getLocation().getAddress()));
 
+            policeStation.setParentStation(resolveParent(dto.getParentStationUid()));
             policeStation.update();
         } else {
-            Optional<PoliceStation> existingPoliceStation = policeStationRepository.findByNameAndIsActiveTrue(policeStationDto.getName());
-            if (existingPoliceStation.isPresent()) {
+            if (policeStationRepository.findByNameAndIsActiveTrue(dto.getName()).isPresent())
                 return Response.error("Police station with this name is already registered");
-            }
 
             policeStation = new PoliceStation();
-            policeStation.setName(policeStationDto.getName());
-            policeStation.setContactInfo(policeStationDto.getContactInfo());
+            policeStation.setName(dto.getName());
+            policeStation.setContactInfo(dto.getContactInfo());
+            policeStation.setLevel(level);
 
-            AdministrativeArea area = administrativeAreaRepository.findByUid(policeStationDto.getAdministrativeAreaUid())
+            AdministrativeArea area = administrativeAreaRepository.findByUid(dto.getAdministrativeAreaUid())
                     .orElseThrow(() -> new RuntimeException("Invalid administrative area"));
             policeStation.setPoliceStationLocation(area);
 
-            // Set Location
-            Location location = new Location(
-                    policeStationDto.getLocation().getLatitude(),
-                    policeStationDto.getLocation().getLongitude(),
-                    policeStationDto.getLocation().getAddress()
-            );
-            policeStation.setLocation(location);
+            policeStation.setLocation(new Location(
+                    dto.getLocation().getLatitude(),
+                    dto.getLocation().getLongitude(),
+                    dto.getLocation().getAddress()));
+
+            policeStation.setParentStation(resolveParent(dto.getParentStationUid()));
         }
 
         try {
@@ -100,6 +102,12 @@ public class PoliceStationService {
         return new Response<>(policeStation);
     }
 
+    private PoliceStation resolveParent(String parentUid) {
+        if (parentUid == null) return null;
+        return policeStationRepository.findByUid(parentUid)
+                .orElseThrow(() -> new RuntimeException("Parent station not found: " + parentUid));
+    }
+
     public Response<PoliceStation> getPoliceStation(String uid) {
         if (uid == null)
             return new Response<>("Uid is required");
@@ -111,7 +119,7 @@ public class PoliceStationService {
         if (uid == null)
             return new Response<>("Uid is required");
         Optional<PoliceStation> optionalPoliceStation = policeStationRepository.findByUid(uid);
-        if (!optionalPoliceStation.isPresent())
+        if (optionalPoliceStation.isEmpty())
             return new Response<>("Invalid police station provided");
         if (!optionalPoliceStation.get().getIsActive())
             return new Response<>("police station already deleted");
@@ -138,11 +146,10 @@ public class PoliceStationService {
 
         List<PoliceStation> nearbyStations = allStations.stream()
                 .filter(station -> station.getLocation() != null)
-                .map(station -> {
+                .peek(station -> {
                     double dist = calculateDistance(latitude, longitude,
                             station.getLocation().getLatitude(), station.getLocation().getLongitude());
                     station.setTemporaryDistance(dist);
-                    return station;
                 })
                 .filter(station -> station.getTemporaryDistance() <= maxDistance)
                 .sorted(Comparator.comparingDouble(PoliceStation::getTemporaryDistance))

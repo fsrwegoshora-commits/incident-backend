@@ -48,4 +48,8 @@ public class IncidentReportDto {
     private String leadAgencyCode; // e.g., "POLICE" (default)
     private EmergencyLevel emergencyLevel; // LOW, MEDIUM, HIGH, CRITICAL
     private List<String> involvedAgencyCodes;
+
+    // Multi-service response request flags
+    private Boolean requiresFireService;
+    private Boolean requiresMedicalService;
 }

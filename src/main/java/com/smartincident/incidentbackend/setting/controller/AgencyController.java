@@ -9,47 +9,42 @@ import com.smartincident.incidentbackend.setting.service.AgencyService;
 import com.smartincident.incidentbackend.utils.PageableParam;
 import com.smartincident.incidentbackend.utils.Response;
 import com.smartincident.incidentbackend.utils.ResponsePage;
-import io.leangen.graphql.annotations.GraphQLArgument;
-import io.leangen.graphql.annotations.GraphQLMutation;
-import io.leangen.graphql.annotations.GraphQLQuery;
-import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
 
-@Controller
+@RestController
 @Slf4j
-@GraphQLApi
+@RequestMapping("/api/agencies")
 @RequiredArgsConstructor
 public class AgencyController {
     private final AgencyService agencyService;
 
     @Authenticated
     @AuthorizedRole({Role.ROOT})
-    @GraphQLMutation(name = "saveAgency", description = "Saving agency information")
-    public Response<Agency>saveAgency(@GraphQLArgument(name = "agencyDto") AgencyDto agencyDto){
+    @PostMapping
+    public Response<Agency> saveAgency(@RequestBody AgencyDto agencyDto) {
         return agencyService.saveAgency(agencyDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.ROOT,Role.STATION_ADMIN})
-    @GraphQLQuery(name = "getAgency", description = "Getting agency information")
-    public Response<Agency> getAgency(@GraphQLArgument(name = "uid") String uid){
+    @AuthorizedRole({Role.ROOT, Role.STATION_ADMIN})
+    @GetMapping("/{uid}")
+    public Response<Agency> getAgency(@PathVariable String uid) {
         return agencyService.getAgencyByUid(uid);
     }
 
     @Authenticated
     @AuthorizedRole({Role.ROOT})
-    @GraphQLMutation(name = "deleteAgency", description = "Deleting agency information")
-    public Response<Agency>deleteAgency(@GraphQLArgument(name = "uid") String uid){
+    @DeleteMapping("/{uid}")
+    public Response<Agency> deleteAgency(@PathVariable String uid) {
         return agencyService.deleteAgency(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.ROOT,Role.STATION_ADMIN})
-    @GraphQLQuery(name = "getAgencies", description = "Getting agencies information")
-    public ResponsePage<Agency>getAgencies(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam){
-        return agencyService.getAgencies(pageableParam!=null?pageableParam:new PageableParam());
+    @AuthorizedRole({Role.ROOT, Role.STATION_ADMIN})
+    @GetMapping
+    public ResponsePage<Agency> getAgencies(@ModelAttribute PageableParam pageableParam) {
+        return agencyService.getAgencies(pageableParam != null ? pageableParam : new PageableParam());
     }
 }
-

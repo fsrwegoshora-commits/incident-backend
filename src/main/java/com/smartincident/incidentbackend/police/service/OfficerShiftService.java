@@ -272,7 +272,7 @@ public class OfficerShiftService {
         }
 
         Optional<PoliceStation> stationOpt = policeStationRepository.findByUid(stationUid);
-        if (!stationOpt.isPresent()) {
+        if (stationOpt.isEmpty()) {
             return Response.error("Police station not found");
         }
 

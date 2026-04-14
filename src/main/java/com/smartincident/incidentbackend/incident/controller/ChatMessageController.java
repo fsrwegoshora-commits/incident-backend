@@ -7,79 +7,70 @@ import com.smartincident.incidentbackend.authotp.security.Authenticated;
 import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
 import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.utils.*;
-import io.leangen.graphql.annotations.GraphQLArgument;
-import io.leangen.graphql.annotations.GraphQLMutation;
-import io.leangen.graphql.annotations.GraphQLQuery;
-import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
-@Controller
-@GraphQLApi
+@RestController
+@RequestMapping("/api/chat/messages")
 @RequiredArgsConstructor
 @Slf4j
 public class ChatMessageController {
 
     private final ChatMessageService chatMessageService;
 
-
     @Authenticated
-    @GraphQLMutation(name = "sendChatMessage", description = "Send a message in incident chat")
-    public Response<ChatMessage> sendMessage(@GraphQLArgument(name = "chatMessageDto") ChatMessageDto dto) {
+    @PostMapping
+    public Response<ChatMessage> sendMessage(@RequestBody ChatMessageDto dto) {
         log.info(" Sending chat message for incident: {}", dto.getIncidentUid());
         return chatMessageService.sendMessage(dto);
     }
 
-
     @Authenticated
-    @GraphQLMutation(name = "deleteChatMessage", description = "Delete a chat message")
-    public Response<ChatMessage> deleteMessage(@GraphQLArgument(name = "uid") String uid) {
-        log.info("🗑 Deleting chat message: {}", uid);
+    @DeleteMapping("/{uid}")
+    public Response<ChatMessage> deleteMessage(@PathVariable String uid) {
+        log.info("Deleting chat message: {}", uid);
         return chatMessageService.deleteMessage(uid);
     }
 
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
-    @GraphQLMutation(name = "sendSystemMessage", description = "Send automated system message")
-    public Response<ChatMessage> sendSystemMessage(@GraphQLArgument(name = "incidentUid") String incidentUid, @GraphQLArgument(name = "message") String message) {
-        log.info("🤖 Sending system message");
+    @PostMapping("/system")
+    public Response<ChatMessage> sendSystemMessage(@RequestParam String incidentUid, @RequestParam String message) {
+        log.info("Sending system message");
         return chatMessageService.sendSystemMessage(incidentUid, message);
     }
 
     @Authenticated
-    @GraphQLMutation(name = "markMessagesAsRead", description = "Mark messages as read")
-    public Response<Boolean> markMessagesAsRead(@GraphQLArgument(name = "incidentUid") String incidentUid) {
+    @PutMapping("/read/{incidentUid}")
+    public Response<Boolean> markMessagesAsRead(@PathVariable String incidentUid) {
         log.info(" Marking messages as read");
         return chatMessageService.markMessagesAsRead(incidentUid);
     }
 
     @Authenticated
-    @GraphQLQuery(name = "getChatMessage", description = "Get a single chat message by UID")
-    public Response<ChatMessage> getMessage(@GraphQLArgument(name = "uid") String uid) {
+    @GetMapping("/{uid}")
+    public Response<ChatMessage> getMessage(@PathVariable String uid) {
         return chatMessageService.getMessage(uid);
     }
 
     @Authenticated
-    @GraphQLQuery(name = "getIncidentMessages", description = "Get paginated chat messages for an incident")
-    public ResponsePage<ChatMessage> getIncidentMessages(@GraphQLArgument(name = "incidentUid") String incidentUid, @GraphQLArgument(name = "pageableParam") PageableParam pageableParam) {
+    @GetMapping("/incident/{incidentUid}")
+    public ResponsePage<ChatMessage> getIncidentMessages(@PathVariable String incidentUid, @ModelAttribute PageableParam pageableParam) {
         log.info(" Getting incident messages (paginated)");
         return chatMessageService.getIncidentMessages(incidentUid, pageableParam);
     }
 
-
     @Authenticated
-    @GraphQLQuery(name = "getAllIncidentMessages", description = "Get all chat messages for an incident")
-    public ResponseList<ChatMessage> getAllIncidentMessages(@GraphQLArgument(name = "incidentUid") String incidentUid) {
+    @GetMapping("/incident/{incidentUid}/all")
+    public ResponseList<ChatMessage> getAllIncidentMessages(@PathVariable String incidentUid) {
         log.info(" Getting all incident messages");
         return chatMessageService.getAllIncidentMessages(incidentUid);
     }
 
     @Authenticated
-    @GraphQLQuery(name = "getUnreadMessageCount", description = "Get count of unread messages")
-    public Response<Long> getUnreadMessageCount(@GraphQLArgument(name = "incidentUid") String incidentUid) {
+    @GetMapping("/incident/{incidentUid}/unread-count")
+    public Response<Long> getUnreadMessageCount(@PathVariable String incidentUid) {
         return chatMessageService.getUnreadMessageCount(incidentUid);
     }
 }

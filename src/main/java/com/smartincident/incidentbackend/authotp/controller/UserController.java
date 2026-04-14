@@ -13,22 +13,17 @@ import com.smartincident.incidentbackend.police.entity.OfficerShift;
 import com.smartincident.incidentbackend.police.repository.OfficerShiftRepository;
 import com.smartincident.incidentbackend.police.repository.PoliceOfficerRepository;
 import com.smartincident.incidentbackend.utils.*;
-import io.leangen.graphql.annotations.GraphQLArgument;
-import io.leangen.graphql.annotations.GraphQLMutation;
-import io.leangen.graphql.annotations.GraphQLQuery;
-import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
 
-@Controller
-@GraphQLApi
+@RestController
+@RequestMapping("/api/users")
 @RequiredArgsConstructor
 @Slf4j
 public class UserController {
@@ -38,34 +33,34 @@ public class UserController {
     private final UserRepository userRepository;
     private final OfficerShiftRepository officerShiftRepository;
 
-    @GraphQLMutation(name = "userRegistration", description = "New user is registered or update old one")
-    public Response<User> userRegistration(@GraphQLArgument(name = "userDto") UserDto userDto) {
+    @PostMapping("/register")
+    public Response<User> userRegistration(@RequestBody UserDto userDto) {
         return userService.userRegistration(userDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLMutation(name = "registerSpecialUser", description = "Registers a user with a special role (e.g., ADMIN, POLICE_OFFICER)")
-    public Response<User> registerSpecialUser(@GraphQLArgument(name = "userDto") UserDto userDto) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @PostMapping("/register-special")
+    public Response<User> registerSpecialUser(@RequestBody UserDto userDto) {
         log.info("Attempting to register special user with phone: {}", userDto.getPhoneNumber());
         return userService.registerSpecialUser(userDto);
     }
 
-    @GraphQLQuery(name = "getUser", description = "Gets a user using it's uid")
-    public Response<User> getUser(@GraphQLArgument(name = "uid") String uid) {
+    @GetMapping("/{uid}")
+    public Response<User> getUser(@PathVariable String uid) {
         return userService.getUser(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLMutation(name = "deleteUser", description = "Deletes a user using it's uid")
-    public Response<User> deleteUser(@GraphQLArgument(name = "uid") String uid) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @DeleteMapping("/{uid}")
+    public Response<User> deleteUser(@PathVariable String uid) {
         return userService.deleteUser(uid);
     }
 
     @Authenticated
     @AuthorizedRole({Role.CITIZEN})
-    @GraphQLMutation(name = "deleteMyAccount", description = "Allows a citizen to delete their own account")
+    @DeleteMapping("/me")
     public Response<User> deleteMyAccount() {
         try {
             String phoneNumber = jwtAuthInterceptor.getValidatedPhoneNumber();
@@ -76,7 +71,6 @@ public class UserController {
             }
 
             return userService.deleteOwnAccount(phoneNumber, currentToken);
-
         } catch (Exception e) {
             log.error("Error in deleteMyAccount: {}", e.getMessage());
             return Response.error("Authentication failed: " + e.getMessage());
@@ -84,15 +78,15 @@ public class UserController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLQuery(name = "getUsers", description = "Gets a page of users")
-    public ResponsePage<User> getUsers(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @GetMapping
+    public ResponsePage<User> getUsers(@ModelAttribute PageableParam pageableParam) {
         return userService.getUsers(pageableParam != null ? pageableParam : new PageableParam());
     }
 
-    @GraphQLQuery(name = "me")
+    @GetMapping("/me")
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.POLICE_OFFICER, Role.CITIZEN,Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.POLICE_OFFICER, Role.CITIZEN, Role.ROOT})
     public Response<UserDto> getCurrentUser() {
         String phone = jwtAuthInterceptor.extractPhoneFromRequest();
         if (phone == null) {
@@ -121,15 +115,8 @@ public class UserController {
             policeOfficerRepository.findByUserUidAndIsActiveTrue(dto.getUid()).ifPresent(officer -> {
                 dto.setBadgeNumber(officer.getBadgeNumber());
                 dto.setRank(officer.getCode());
-            });
-        }
-        if (user.getRole() == Role.POLICE_OFFICER) {
-            policeOfficerRepository.findByUserUidAndIsActiveTrue(dto.getUid()).ifPresent(officer -> {
-                dto.setBadgeNumber(officer.getBadgeNumber());
-                dto.setRank(officer.getCode());
                 dto.setOfficerUid(officer.getUid());
 
-                // Check if officer is currently on duty
                 LocalDate today = LocalDate.now();
                 LocalTime now = LocalTime.now();
 
@@ -150,16 +137,26 @@ public class UserController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN,Role.ROOT})
-    @GraphQLQuery(name = "getUsersByStation", description = "Gets a page of users")
-    public ResponsePage<User> getUsersByStation(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam, @GraphQLArgument(name = "policeStationUid") String policeStationUid) {
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @GetMapping("/by-station/{policeStationUid}")
+    public ResponsePage<User> getUsersByStation(@ModelAttribute PageableParam pageableParam, @PathVariable String policeStationUid) {
         return userService.getUsersByStation(pageableParam != null ? pageableParam : new PageableParam(), policeStationUid);
     }
 
-    @GraphQLQuery(name = "getSpecialUsers")
+    @Authenticated
+    @AuthorizedRole({Role.ROOT})
+    @PatchMapping("/{uid}/role")
+    public Response<User> changeUserRole(
+            @PathVariable String uid,
+            @RequestParam Role role,
+            @RequestParam(required = false) String stationUid) {
+        return userService.changeUserRole(uid, role, stationUid);
+    }
+
+    @GetMapping("/special")
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
-    public ResponseList<User> getSpecialUsers(@GraphQLArgument(name = "role") Role role) {
+    public ResponseList<User> getSpecialUsers(@RequestParam(required = false) Role role) {
         List<Role> allowedRoles = List.of(Role.POLICE_OFFICER, Role.STATION_ADMIN, Role.ROOT);
 
         if (role != null && !allowedRoles.contains(role)) {
@@ -182,6 +179,4 @@ public class UserController {
 
         return new ResponseList<>(users);
     }
-
-
 }

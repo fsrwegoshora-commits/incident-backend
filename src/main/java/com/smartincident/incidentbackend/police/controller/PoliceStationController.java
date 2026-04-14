@@ -15,18 +15,14 @@ import com.smartincident.incidentbackend.utils.PageableParam;
 import com.smartincident.incidentbackend.utils.Response;
 import com.smartincident.incidentbackend.utils.ResponseList;
 import com.smartincident.incidentbackend.utils.ResponsePage;
-import io.leangen.graphql.annotations.GraphQLArgument;
-import io.leangen.graphql.annotations.GraphQLMutation;
-import io.leangen.graphql.annotations.GraphQLQuery;
-import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Controller
+@RestController
+@RequestMapping("/api/police/stations")
 @RequiredArgsConstructor
-@GraphQLApi
 public class PoliceStationController {
     private final PoliceStationService policeStationService;
     private final JwtAuthInterceptor jwtAuthInterceptor;
@@ -35,35 +31,35 @@ public class PoliceStationController {
 
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
-    @GraphQLMutation(name = "savePoliceStation", description = "New police station is registered or update old one")
-    public Response<PoliceStation> savePoliceStation(@GraphQLArgument(name = "policeStationDto") PoliceStationDto policeStationDto) {
+    @PostMapping
+    public Response<PoliceStation> savePoliceStation(@RequestBody PoliceStationDto policeStationDto) {
         return policeStationService.savePoliceStation(policeStationDto);
     }
 
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
-    @GraphQLQuery(name = "getPoliceStation", description = "Gets a police station using its uid")
-    public Response<PoliceStation> getPoliceStation(@GraphQLArgument(name = "uid") String uid) {
+    @GetMapping("/{uid}")
+    public Response<PoliceStation> getPoliceStation(@PathVariable String uid) {
         return policeStationService.getPoliceStation(uid);
     }
 
     @Authenticated
     @AuthorizedRole({Role.ROOT})
-    @GraphQLMutation(name = "deletePoliceStation", description = "Deletes a police station using its uid")
-    public Response<PoliceStation> deletePoliceStation(@GraphQLArgument(name = "uid") String uid) {
+    @DeleteMapping("/{uid}")
+    public Response<PoliceStation> deletePoliceStation(@PathVariable String uid) {
         return policeStationService.deletePoliceStation(uid);
     }
 
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
-    @GraphQLQuery(name = "getPoliceStations", description = "Gets a page of police stations")
-    public ResponsePage<PoliceStation> getPoliceStations(@GraphQLArgument(name = "pageableParam") PageableParam pageableParam) {
+    @GetMapping
+    public ResponsePage<PoliceStation> getPoliceStations(@ModelAttribute PageableParam pageableParam) {
         return policeStationService.getPoliceStations(pageableParam != null ? pageableParam : new PageableParam());
     }
 
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
-    @GraphQLQuery(name = "getStationsByAdmin")
+    @GetMapping("/admin")
     public ResponseList<PoliceStationDto> getStationsByAdmin() {
         String phone = jwtAuthInterceptor.extractPhoneFromRequest();
         if (phone == null) {
@@ -106,12 +102,13 @@ public class PoliceStationController {
         return new ResponseList<>(stations);
     }
 
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT,Role.POLICE_OFFICER,Role.CITIZEN})
-    @GraphQLQuery(name = "getNearbyPoliceStations", description = "Gets police stations near a given location")
+    @Authenticated
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.POLICE_OFFICER, Role.CITIZEN})
+    @GetMapping("/nearby")
     public ResponseList<PoliceStation> getNearbyPoliceStations(
-            @GraphQLArgument(name = "latitude") double latitude,
-            @GraphQLArgument(name = "longitude") double longitude,
-            @GraphQLArgument(name = "maxDistance") double maxDistance) {
+            @RequestParam double latitude,
+            @RequestParam double longitude,
+            @RequestParam double maxDistance) {
         return policeStationService.getNearbyPoliceStations(latitude, longitude, maxDistance);
     }
 }

@@ -7,10 +7,13 @@ import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 import java.util.Optional;
@@ -22,8 +25,26 @@ public class JwtService {
     private final UserRepository userRepository;
     private final TokenBlacklistService tokenBlacklistService;
 
-    // secret key ya JWT
-    private static final Key SECRET_KEY = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+    @Value("${jwt.secret}")
+    private String secretKeyStr;
+
+    @Value("${jwt.expiration.access:86400000}")
+    private long accessTokenExpiry;
+
+    @Value("${jwt.expiration.refresh:604800000}")
+    private long refreshTokenExpiry;
+
+    private Key secretKey;
+
+    @PostConstruct
+    public void init() {
+        // Ensure the secret is at least 32 bytes for HMAC-SHA256
+        byte[] keyBytes = secretKeyStr.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException("jwt.secret must be at least 32 characters long");
+        }
+        this.secretKey = Keys.hmacShaKeyFor(keyBytes);
+    }
 
     public String generateToken(User user) {
         return Jwts.builder()
@@ -31,13 +52,42 @@ public class JwtService {
                 .claim("role", user.getRole().name())
                 .claim("station_id", user.getStation() != null ? user.getStation().getUid() : null)
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 86400000))
-                .signWith(SECRET_KEY)
+                .setExpiration(new Date(System.currentTimeMillis() + accessTokenExpiry))
+                .signWith(secretKey)
                 .compact();
     }
 
+    public String generateRefreshToken(User user) {
+        return Jwts.builder()
+                .setSubject(user.getPhoneNumber())
+                .claim("type", "refresh")
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + refreshTokenExpiry))
+                .signWith(secretKey)
+                .compact();
+    }
+
+    public String refreshAccessToken(String refreshToken) {
+        Claims claims = extractAllClaims(refreshToken);
+
+        // Ensure it's actually a refresh token
+        if (!"refresh".equals(claims.get("type"))) {
+            throw new RuntimeException("Invalid refresh token");
+        }
+
+        if (isTokenExpired(refreshToken)) {
+            throw new RuntimeException("Refresh token has expired, please log in again");
+        }
+
+        String phone = claims.getSubject();
+        User user = userRepository.findByPhoneNumberAndIsActiveTrue(phone)
+                .orElseThrow(() -> new RuntimeException("User not found or inactive"));
+
+        return generateToken(user);
+    }
+
     public String extractPhone(String token) {
-        return extractAllClaims(token).getSubject(); // subject = phoneNumber
+        return extractAllClaims(token).getSubject();
     }
 
     public String extractRole(String token) {
@@ -50,64 +100,39 @@ public class JwtService {
 
     private Claims extractAllClaims(String token) {
         return Jwts.parser()
-                .setSigningKey(SECRET_KEY)
+                .setSigningKey(secretKey)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
     }
 
-
     private boolean isTokenExpired(String token) {
-        Date expiration = Jwts.parser()
-                .setSigningKey(SECRET_KEY)
-                .build()
-                .parseClaimsJws(token)
-                .getBody()
-                .getExpiration();
-        return expiration.before(new Date());
-    }
-    public String generateRefreshToken(User user) {
-        return Jwts.builder()
-                .setSubject(user.getPhoneNumber())
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 604800000)) // 7 days
-                .signWith(SECRET_KEY)
-                .compact();
-    }
-
-    public String refreshToken(String refreshToken) {
-        String phone = extractPhone(refreshToken);
-        return generateToken(userRepository.findByPhoneNumber(phone).orElseThrow(() -> new RuntimeException("User not found")));
+        return extractAllClaims(token).getExpiration().before(new Date());
     }
 
     public boolean isTokenValid(String token) {
         try {
-            // 1. Check if token is blacklisted
             if (tokenBlacklistService.isTokenBlacklisted(token)) {
                 log.info("Token is blacklisted");
                 return false;
             }
 
-            // 2. Check if user is blacklisted
             String phoneNumber = extractPhone(token);
+
             if (tokenBlacklistService.isUserBlacklisted(phoneNumber)) {
                 log.info("User is blacklisted: {}", phoneNumber);
                 return false;
             }
 
             Optional<User> oUser = userRepository.findByPhoneNumberAndIsActiveTrue(phoneNumber);
-            if (oUser.isEmpty() || !oUser.get().getIsActive()) {
-                log.info("User account deleted or inactive: {}", phoneNumber);
+            if (oUser.isEmpty()) {
+                log.info("User account not found or inactive: {}", phoneNumber);
                 return false;
             }
 
-            // 3. Check standard JWT validation
-            Jwts.parser()
-                    .setSigningKey(SECRET_KEY)
-                    .build()
-                    .parseClaimsJws(token);
+            // Validates signature and expiry in one call
+            Jwts.parser().setSigningKey(secretKey).build().parseClaimsJws(token);
 
-            // 4. Check if token expired
             return !isTokenExpired(token);
 
         } catch (JwtException e) {
@@ -115,22 +140,19 @@ public class JwtService {
         }
     }
 
-    // Invalidate specific token (for logout)
     public void invalidateToken(String token) {
         try {
             Date expiration = extractAllClaims(token).getExpiration();
             long ttl = expiration.getTime() - System.currentTimeMillis();
-
             if (ttl > 0) {
                 tokenBlacklistService.blacklistToken(token, expiration.getTime());
-                log.info("Token invalidated: {}", token.substring(0, 10) + "...");
+                log.info("Token invalidated");
             }
         } catch (JwtException e) {
             log.warn("Failed to invalidate token: {}", e.getMessage());
         }
     }
 
-    // Invalidate all tokens for user (for account deletion)
     public void invalidateAllUserTokens(String phoneNumber) {
         tokenBlacklistService.blacklistUser(phoneNumber);
         log.info("All tokens invalidated for user: {}", phoneNumber);
@@ -138,6 +160,5 @@ public class JwtService {
 
     public void removeUserFromBlacklist(String phoneNumber) {
         tokenBlacklistService.removeUserFromBlacklist(phoneNumber);
-        log.info("User removed from JWT blacklist: {}", phoneNumber);
     }
 }

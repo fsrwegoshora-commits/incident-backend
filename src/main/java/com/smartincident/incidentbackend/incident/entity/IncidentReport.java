@@ -93,6 +93,16 @@ public class IncidentReport extends BaseEntity {
     @Column(nullable = false)
     private EmergencyLevel emergencyLevel;
 
+    @Column(nullable = false)
+    private Boolean requiresFireService = false;
+
+    @Column(nullable = false)
+    private Boolean requiresMedicalService = false;
+
+    @OneToMany(mappedBy = "incident", cascade = CascadeType.ALL)
+    @JsonIgnore
+    private List<com.smartincident.incidentbackend.emergency.entity.IncidentDispatch> dispatches;
+
 
     @Override
     public String toString() {

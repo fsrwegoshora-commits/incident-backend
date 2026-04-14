@@ -32,6 +32,7 @@ public class TrafficCheckPointService {
     private final PoliceStationRepository policeStationRepository;
     private final DepartmentRepository departmentRepository;
     private final NotificationService notificationService;
+
     public Response<TrafficCheckpoint> saveTrafficCheckpoint(TrafficCheckPointDto dto) {
 
         if (dto == null)
@@ -173,11 +174,15 @@ public class TrafficCheckPointService {
         cp.setSupervisingOfficer(officer);
         cp.update();
 
-        TrafficCheckpoint saved = trafficCheckPointRepository.save(cp);
+        try {
+            TrafficCheckpoint saved = trafficCheckPointRepository.save(cp);
+            notifySupervisorAssigned(saved);
+            return Response.success(saved);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.error("Failed to assign supervisor");
+        }
 
-        notifySupervisorAssigned(saved);
-
-        return Response.success(saved);
     }
 
     public Response<TrafficCheckpoint> changeSupervisor(String checkpointUid, String newOfficerUid) {
@@ -200,11 +205,16 @@ public class TrafficCheckPointService {
         cp.setSupervisingOfficer(newOfficer);
         cp.update();
 
-        TrafficCheckpoint saved = trafficCheckPointRepository.save(cp);
+        try {
+            TrafficCheckpoint saved = trafficCheckPointRepository.save(cp);
+            notifyOldSupervisorRemoved(oldSupervisor, saved);
+            notifySupervisorChanged(saved);
+            return Response.success(saved);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Response.error("Failed to change supervisor");
+        }
 
-        notifyOldSupervisorRemoved(oldSupervisor, saved);
-        notifySupervisorChanged(saved);
-        return Response.success(saved);
     }
 
     private void notifySupervisorChanged(TrafficCheckpoint checkpoint) {
