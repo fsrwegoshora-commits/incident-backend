@@ -19,29 +19,29 @@ public interface EmergencyVehicleRepository extends JpaRepository<EmergencyVehic
         select v from EmergencyVehicle v
         where (:key = '' or lower(concat(v.plateNumber, v.model)) like %:key%)
           and (:isActive is null or v.isActive = :isActive)
-          and (:stationUid is null or v.station.uid = :stationUid)
+          and (:unitUid is null or v.emergencyUnit.uid = :unitUid)
         order by v.vehicleType, v.plateNumber
         """)
-    Page<EmergencyVehicle> findVehicles(Pageable pageable, Boolean isActive, String key, String stationUid);
+    Page<EmergencyVehicle> findVehicles(Pageable pageable, Boolean isActive, String key, String unitUid);
 
     @Query("""
         select v from EmergencyVehicle v
-        where v.station.uid = :stationUid
+        where v.emergencyUnit.uid = :unitUid
           and v.isActive = true
           and v.status = :status
         order by v.vehicleType, v.plateNumber
         """)
-    List<EmergencyVehicle> findByStationUidAndStatus(String stationUid, VehicleStatus status);
+    List<EmergencyVehicle> findByUnitUidAndStatus(String unitUid, VehicleStatus status);
 
     @Query("""
         select v from EmergencyVehicle v
-        where v.station.uid = :stationUid
+        where v.emergencyUnit.uid = :unitUid
           and v.isActive = true
           and v.status = 'AVAILABLE'
           and (:vehicleType is null or v.vehicleType = :vehicleType)
         order by v.vehicleType, v.plateNumber
         """)
-    List<EmergencyVehicle> findAvailableAtStation(String stationUid, VehicleType vehicleType);
+    List<EmergencyVehicle> findAvailableAtStation(String unitUid, VehicleType vehicleType);
 
     boolean existsByPlateNumber(String plateNumber);
 }

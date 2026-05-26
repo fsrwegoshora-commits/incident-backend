@@ -26,6 +26,12 @@ public class EmergencyVehicleDto {
     private Integer stretcherCapacity;
 
     // Assignment
-    private String stationUid;
-    private String departmentUid;
+    /** UID of the EmergencyUnit this vehicle is based at. */
+    private String emergencyUnitUid;
+
+    /**
+     * UID of the Hospital that owns this ambulance.
+     * Required when vehicleType is AMBULANCE or ADVANCED_AMBULANCE.
+     */
+    private String baseHospitalUid;
 }

@@ -1,6 +1,8 @@
 package com.smartincident.incidentbackend.authotp.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.smartincident.incidentbackend.emergency.entity.EmergencyUnit;
+import com.smartincident.incidentbackend.enums.DispatcherAppointment;
 import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.entity.BaseEntity;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
@@ -23,6 +25,14 @@ public class User extends BaseEntity {
     @Column(unique = true)
     private String phoneNumber;
 
+    /** Unique username for management users (ROOT, AGENCY_ADMIN, etc.). Null for citizens. */
+    @Column(unique = true)
+    private String username;
+
+    /** BCrypt-hashed password for management users. Null for citizens (who use OTP). */
+    @Column(name = "password_hash")
+    private String passwordHash;
+
     @Column(name = "name",nullable = false)
     private String name;
 
@@ -36,11 +46,30 @@ public class User extends BaseEntity {
     @Column(nullable = false)
     private Role role = Role.CITIZEN;
 
+    /**
+     * The EmergencyUnit this user is assigned to.
+     * Used for Fire and Medical roles (fire officer, medic, fire/medical station admin).
+     * For Police roles, use policeStation instead.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "station_id")
-    @JsonIgnoreProperties({"parentStation", "policeStationLocation", "temporaryDistance"})
-    private PoliceStation station;
+    @JoinColumn(name = "emergency_unit_id")
+    @JsonIgnoreProperties({"parentUnit", "administrativeArea", "temporaryDistance"})
+    private EmergencyUnit emergencyUnit;
 
+    /**
+     * The PoliceStation this user belongs to.
+     * Used for Police roles (POLICE_OFFICER, STATION_ADMIN).
+     * Null for fire and medical users.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "police_station_id")
+    @JsonIgnoreProperties({"parentStation", "policeStationLocation", "temporaryDistance"})
+    private PoliceStation policeStation;
+
+    /** Appointment/rank within the dispatch center hierarchy. Applies to DISPATCH_CENTER_ADMIN, DISPATCHER_SUPERVISOR, DISPATCHER. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "dispatcher_appointment")
+    private DispatcherAppointment appointment;
 
     @Override
     public String toString() {
@@ -49,7 +78,7 @@ public class User extends BaseEntity {
                 ", uid='" + getUid() + '\'' +
                 ", name='" + name + '\'' +
                 ", phoneNumber='" + phoneNumber + '\'' +
-                // OMIT station
+                // OMIT emergencyUnit
                 '}';
     }
 }

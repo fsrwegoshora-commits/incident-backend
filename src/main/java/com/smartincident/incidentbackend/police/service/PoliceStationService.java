@@ -34,18 +34,12 @@ public class PoliceStationService {
             return Response.error("Police station name is required");
         if (dto.getContactInfo() == null)
             return Response.error("Contact information is required");
-        if (dto.getAdministrativeAreaUid() == null)
-            return Response.error("Administrative area is required");
         if (dto.getLocation() == null)
             return Response.error("Location is required");
         if (dto.getLocation().getLatitude() == null || dto.getLocation().getLongitude() == null)
             return Response.error("Latitude and longitude are required");
 
         StationLevel level = dto.getLevel() != null ? dto.getLevel() : StationLevel.POLICE_STATION;
-
-        // Every level except NATIONAL_HQ must have a parent
-        if (level != StationLevel.NATIONAL_HQ && dto.getParentStationUid() == null)
-            return Response.error("Parent station is required for all station levels except National HQ");
 
         PoliceStation policeStation;
 
@@ -59,9 +53,10 @@ public class PoliceStationService {
             policeStation.setContactInfo(dto.getContactInfo());
             policeStation.setLevel(level);
 
-            AdministrativeArea area = administrativeAreaRepository.findByUid(dto.getAdministrativeAreaUid())
-                    .orElseThrow(() -> new RuntimeException("Invalid administrative area"));
-            policeStation.setPoliceStationLocation(area);
+            if (dto.getAdministrativeAreaUid() != null) {
+                administrativeAreaRepository.findByUid(dto.getAdministrativeAreaUid())
+                        .ifPresent(policeStation::setPoliceStationLocation);
+            }
 
             policeStation.setLocation(new Location(
                     dto.getLocation().getLatitude(),
@@ -79,9 +74,10 @@ public class PoliceStationService {
             policeStation.setContactInfo(dto.getContactInfo());
             policeStation.setLevel(level);
 
-            AdministrativeArea area = administrativeAreaRepository.findByUid(dto.getAdministrativeAreaUid())
-                    .orElseThrow(() -> new RuntimeException("Invalid administrative area"));
-            policeStation.setPoliceStationLocation(area);
+            if (dto.getAdministrativeAreaUid() != null) {
+                administrativeAreaRepository.findByUid(dto.getAdministrativeAreaUid())
+                        .ifPresent(policeStation::setPoliceStationLocation);
+            }
 
             policeStation.setLocation(new Location(
                     dto.getLocation().getLatitude(),
@@ -137,7 +133,7 @@ public class PoliceStationService {
     }
 
     public ResponsePage<PoliceStation> getPoliceStations(PageableParam pageableParam) {
-        String stationUid = LoggedUser.getStationUid();
+        String stationUid = LoggedUser.getPoliceStationUid();
         return new ResponsePage<>(policeStationRepository.getPoliceStations(pageableParam.getPageable(true), pageableParam.getIsActive(), pageableParam.key(),stationUid));
     }
 

@@ -5,6 +5,7 @@ import com.smartincident.incidentbackend.authotp.security.JwtAuthInterceptor;
 import com.smartincident.incidentbackend.authotp.service.JwtService;
 import com.smartincident.incidentbackend.authotp.service.OtpService;
 import com.smartincident.incidentbackend.utils.Response;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,15 +28,29 @@ public class OtpController {
 
     /**
      * Step 2 — Verify OTP and receive access + refresh tokens.
+     * Optional device headers: X-Device-Id, X-Device-Name, X-Platform (ANDROID|IOS|WEB)
      */
     @PostMapping("/otp/verify")
-    public Response<AuthResponse> verifyOtp(@RequestParam String phoneNumber, @RequestParam String code) {
+    public Response<AuthResponse> verifyOtp(
+            @RequestParam String phoneNumber,
+            @RequestParam String code,
+            @RequestHeader(value = "X-Device-Id",   required = false) String deviceId,
+            @RequestHeader(value = "X-Device-Name", required = false) String deviceName,
+            @RequestHeader(value = "X-Platform",    required = false) String platform,
+            HttpServletRequest request) {
         try {
-            AuthResponse auth = otpService.loginWithOtp(phoneNumber, code);
+            String ip = resolveIp(request);
+            AuthResponse auth = otpService.loginWithOtp(phoneNumber, code, deviceId, deviceName, platform, ip);
             return Response.success(auth);
         } catch (RuntimeException e) {
             return Response.error(e.getMessage());
         }
+    }
+
+    private static String resolveIp(HttpServletRequest req) {
+        String fwd = req.getHeader("X-Forwarded-For");
+        if (fwd != null && !fwd.isBlank()) return fwd.split(",")[0].trim();
+        return req.getRemoteAddr();
     }
 
     /**

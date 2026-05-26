@@ -50,7 +50,8 @@ public class JwtService {
         return Jwts.builder()
                 .setSubject(user.getPhoneNumber())
                 .claim("role", user.getRole().name())
-                .claim("station_id", user.getStation() != null ? user.getStation().getUid() : null)
+                .claim("station_id", user.getEmergencyUnit() != null ? user.getEmergencyUnit().getUid() : null)
+                .claim("agency_id", user.getAgency() != null ? user.getAgency().getUid() : null)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + accessTokenExpiry))
                 .signWith(secretKey)
@@ -96,6 +97,10 @@ public class JwtService {
 
     public String extractStationId(String token) {
         return (String) extractAllClaims(token).get("station_id");
+    }
+
+    public String extractAgencyId(String token) {
+        return (String) extractAllClaims(token).get("agency_id");
     }
 
     private Claims extractAllClaims(String token) {

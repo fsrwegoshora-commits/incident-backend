@@ -18,7 +18,7 @@ public interface IncidentDispatchRepository extends JpaRepository<IncidentDispat
 
     @Query("""
         select d from IncidentDispatch d
-        where d.vehicle.station.uid = :stationUid
+        where d.vehicle.emergencyUnit.uid = :stationUid
           and d.status not in ('CLEARED', 'CANCELLED')
         order by d.dispatchedAt desc
         """)

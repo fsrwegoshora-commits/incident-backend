@@ -1,11 +1,10 @@
 package com.smartincident.incidentbackend.emergency.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
-import com.smartincident.incidentbackend.emergency.dto.EmergencyVehicleDto;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.emergency.entity.EmergencyVehicle;
 import com.smartincident.incidentbackend.emergency.service.EmergencyVehicleService;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.utils.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -18,44 +17,37 @@ public class EmergencyVehicleController {
     private final EmergencyVehicleService vehicleService;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.FIRE_STATION_ADMIN, Role.MEDICAL_STATION_ADMIN, Role.ROOT})
-    @PostMapping
-    public Response<EmergencyVehicle> saveVehicle(@RequestBody EmergencyVehicleDto dto) {
-        return vehicleService.saveVehicle(dto);
-    }
-
-    @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.FIRE_STATION_ADMIN, Role.MEDICAL_STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_VEHICLES)
     @GetMapping("/{uid}")
     public Response<EmergencyVehicle> getVehicle(@PathVariable String uid) {
         return vehicleService.getVehicle(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.FIRE_STATION_ADMIN, Role.MEDICAL_STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_VEHICLES)
     @DeleteMapping("/{uid}")
     public Response<EmergencyVehicle> deleteVehicle(@PathVariable String uid) {
         return vehicleService.deleteVehicle(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_VEHICLES)
     @GetMapping
     public ResponsePage<EmergencyVehicle> getVehicles(@ModelAttribute PageableParam param) {
         return vehicleService.getVehicles(param != null ? param : new PageableParam());
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.FIRE_STATION_ADMIN, Role.MEDICAL_STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_VEHICLES)
     @GetMapping("/by-station/{stationUid}")
     public ResponsePage<EmergencyVehicle> getByStation(
             @ModelAttribute PageableParam param,
             @PathVariable String stationUid) {
-        return vehicleService.getVehiclesByStation(param != null ? param : new PageableParam(), stationUid);
+        return vehicleService.getVehiclesByUnit(param != null ? param : new PageableParam(), stationUid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.FIRE_STATION_ADMIN, Role.MEDICAL_STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_VEHICLES)
     @GetMapping("/available")
     public ResponseList<EmergencyVehicle> getAvailable(
             @RequestParam(required = false) String vehicleType) {
@@ -63,7 +55,7 @@ public class EmergencyVehicleController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.FIRE_STATION_ADMIN, Role.MEDICAL_STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_VEHICLES)
     @PutMapping("/{uid}/status")
     public Response<EmergencyVehicle> updateStatus(
             @PathVariable String uid,

@@ -2,12 +2,15 @@ package com.smartincident.incidentbackend.police.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
 import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
+import com.smartincident.incidentbackend.enums.AppointmentPosition;
 import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.police.dto.PoliceOfficerDto;
 import com.smartincident.incidentbackend.police.entity.OfficerShift;
 import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
 import com.smartincident.incidentbackend.police.repository.OfficerShiftRepository;
 import com.smartincident.incidentbackend.police.repository.PoliceOfficerRepository;
+import com.smartincident.incidentbackend.police.repository.StationAppointmentRepository;
+import com.smartincident.incidentbackend.police.repository.TrafficCheckPointRepository;
 import com.smartincident.incidentbackend.police.service.PoliceOfficerService;
 import com.smartincident.incidentbackend.utils.*;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +20,9 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/police/officers")
@@ -26,6 +31,8 @@ public class PoliceOfficerController {
     private final PoliceOfficerService policeOfficerService;
     private final PoliceOfficerRepository policeOfficerRepository;
     private final OfficerShiftRepository officerShiftRepository;
+    private final StationAppointmentRepository appointmentRepository;
+    private final TrafficCheckPointRepository checkpointRepository;
 
     @Authenticated
     @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
@@ -74,7 +81,7 @@ public class PoliceOfficerController {
         String stationUid = LoggedUser.getStationUid();
         if (stationUid == null) return ResponseList.error("Station context missing");
 
-        List<PoliceOfficer> allOfficers = policeOfficerRepository.findByStationUidAndIsActiveTrue(stationUid);
+        List<PoliceOfficer> allOfficers = policeOfficerRepository.findByPoliceStationUidAndIsActiveTrue(stationUid);
         List<PoliceOfficer> available = new ArrayList<>();
 
         for (PoliceOfficer officer : allOfficers) {
@@ -96,31 +103,61 @@ public class PoliceOfficerController {
     public ResponseList<PoliceOfficer> getAvailableOfficersForSlot(
             @RequestParam String date,
             @RequestParam String startTime,
-            @RequestParam String endTime) {
-        if (date == null || startTime == null || endTime == null) {
-            return ResponseList.error("Date and time range are required");
-        }
+            @RequestParam String endTime,
+            @RequestParam(required = false) String dutyType) {
 
-        LocalDate parsedDate = LocalDate.parse(date);
+        if (date == null || startTime == null || endTime == null)
+            return ResponseList.error("Date and time range are required");
+
+        LocalDate parsedDate  = LocalDate.parse(date);
         LocalTime parsedStart = LocalTime.parse(startTime);
-        LocalTime parsedEnd = LocalTime.parse(endTime);
+        LocalTime parsedEnd   = LocalTime.parse(endTime);
 
         String stationUid = LoggedUser.getStationUid();
         if (stationUid == null) return ResponseList.error("Station context missing");
 
-        List<PoliceOfficer> allOfficers = policeOfficerRepository.findByStationUidAndIsActiveTrue(stationUid);
-        List<PoliceOfficer> available = new ArrayList<>();
+        List<PoliceOfficer> allOfficers = policeOfficerRepository.findByPoliceStationUidAndIsActiveTrue(stationUid);
 
-        for (PoliceOfficer officer : allOfficers) {
-            List<OfficerShift> shifts = officerShiftRepository.findByOfficerUidAndShiftDate(officer.getUid(), parsedDate);
+        // ── Build exclusion set ────────────────────────────────────────────────
+        Set<String> excludedUids = new HashSet<>();
 
-            boolean overlaps = shifts.stream().anyMatch(shift ->
-                    !(shift.getEndTime().isBefore(parsedStart) || shift.getStartTime().isAfter(parsedEnd))
+        boolean isCheckpointDuty = "CHECKPOINT_DUTY".equals(dutyType);
+        boolean isStationDuty    = "STATION_DUTY".equals(dutyType);
+
+        if (isCheckpointDuty || isStationDuty) {
+            // Both duty types: exclude officers already serving as checkpoint supervisors
+            excludedUids.addAll(checkpointRepository.findSupervisorOfficerUidsByStation(stationUid));
+        }
+
+        if (isStationDuty) {
+            // Station Duty: exclude traffic officers and management/administrative positions
+            List<AppointmentPosition> stationExcluded = List.of(
+                    AppointmentPosition.TRAFFIC_OFFICER,
+                    AppointmentPosition.OFFICER_IN_CHARGE,
+                    AppointmentPosition.DEPUTY_OFFICER_IN_CHARGE,
+                    AppointmentPosition.ADMINISTRATIVE_OFFICER
             );
+            excludedUids.addAll(appointmentRepository.findOfficerUidsByStationAndPositions(stationUid, stationExcluded));
 
-            if (!overlaps) {
-                available.add(officer);
-            }
+            // Also exclude users with STATION_ADMIN role
+            allOfficers = allOfficers.stream()
+                    .filter(o -> o.getUserAccount() == null ||
+                                 o.getUserAccount().getRole() != Role.STATION_ADMIN)
+                    .toList();
+        }
+
+        // ── Time-overlap filter + exclusion set filter ─────────────────────────
+        List<PoliceOfficer> available = new ArrayList<>();
+        for (PoliceOfficer officer : allOfficers) {
+            if (excludedUids.contains(officer.getUid())) continue;
+
+            List<OfficerShift> shifts = officerShiftRepository
+                    .findByOfficerUidAndShiftDate(officer.getUid(), parsedDate);
+
+            boolean overlaps = shifts.stream().anyMatch(s ->
+                    !(s.getEndTime().isBefore(parsedStart) || s.getStartTime().isAfter(parsedEnd)));
+
+            if (!overlaps) available.add(officer);
         }
 
         return new ResponseList<>(available);

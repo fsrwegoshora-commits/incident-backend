@@ -203,6 +203,53 @@ public class NotificationService {
         }
     }
 
+    /**
+     * Same as sendNotificationByRoleAndStation but queries by policeStation
+     * (used for STATION_ADMIN / POLICE_OFFICER roles).
+     */
+    @Transactional
+    public ResponseList<Notification> sendNotificationByRoleAndPoliceStation(NotificationDto dto) {
+        log.info("Sending notification to role: {} at police station: {}", dto.getTargetRole(), dto.getTargetStationUid());
+
+        if (dto.getTargetRole() == null)
+            return ResponseList.error("Target role is required");
+
+        try {
+            List<User> targetUsers = dto.getTargetStationUid() != null
+                    ? userRepository.findByRoleAndPoliceStation(dto.getTargetRole(), dto.getTargetStationUid())
+                    : userRepository.findByRole(dto.getTargetRole());
+
+            List<Notification> sentNotifications = new ArrayList<>();
+            for (User user : targetUsers) {
+                Notification notification = new Notification();
+                notification.setUser(user);
+                notification.setTitle(dto.getTitle());
+                notification.setMessage(dto.getMessage());
+                notification.setType(dto.getType());
+                notification.setRelatedEntityUid(dto.getRelatedEntityUid());
+                notification.setRelatedEntityType(dto.getRelatedEntityType());
+                notification.setSentAt(LocalDateTime.now());
+
+                List<NotificationChannel> channels = new ArrayList<>();
+                channels.add(NotificationChannel.IN_APP);
+                if (pushEnabled && dto.getChannels() != null && dto.getChannels().contains(NotificationChannel.PUSH)) {
+                    if (sendPushNotificationToUser(user, dto)) channels.add(NotificationChannel.PUSH);
+                }
+                notification.setChannels(channels);
+                notification.setSentSuccessfully(true);
+
+                Notification saved = notificationRepository.save(notification);
+                sentNotifications.add(saved);
+                broadcastNotificationToUser(user.getUid(), saved);
+            }
+            log.info("Sent {} notifications to police station {}", sentNotifications.size(), dto.getTargetStationUid());
+            return new ResponseList<>(sentNotifications);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseList.error("Failed to send notifications: " + e.getMessage());
+        }
+    }
+
     public ResponsePage<Notification> getUserNotifications(PageableParam pageableParam) {
         String userUid = LoggedUser.getUid();
         if (userUid == null) {

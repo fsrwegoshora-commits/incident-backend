@@ -10,14 +10,15 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.List;
 import java.util.Optional;
 
-public interface PoliceOfficerRepository extends JpaRepository<PoliceOfficer,Long> {
+public interface PoliceOfficerRepository extends JpaRepository<PoliceOfficer, Long> {
 
     Optional<PoliceOfficer> findByUid(String uid);
 
     @Query("""
     select p from PoliceOfficer p
     where lower(concat(p.userAccount.name, p.userAccount.phoneNumber)) like %:key%
-      and (:isActive is null or p.isActive = :isActive) and (:stationUid is null or p.station.uid=:stationUid)
+      and (:isActive is null or p.isActive = :isActive)
+      and (:stationUid is null or p.policeStation.uid = :stationUid)
     order by case p.code
       when 'ISP'   then 1 when 'A_ISP' then 2 when 'SM'    then 3
       when 'S_SGT' then 4 when 'SGT'   then 5 when 'CPL'   then 6
@@ -28,7 +29,8 @@ public interface PoliceOfficerRepository extends JpaRepository<PoliceOfficer,Lon
     @Query("""
     select p from PoliceOfficer p
     where lower(concat(p.userAccount.name, p.userAccount.phoneNumber)) like %:key%
-      and (:isActive is null or p.isActive=:isActive) and p.station.uid=:stationUid
+      and (:isActive is null or p.isActive = :isActive)
+      and p.policeStation.uid = :stationUid
     order by case p.code
       when 'ISP'   then 1 when 'A_ISP' then 2 when 'SM'    then 3
       when 'S_SGT' then 4 when 'SGT'   then 5 when 'CPL'   then 6
@@ -36,7 +38,7 @@ public interface PoliceOfficerRepository extends JpaRepository<PoliceOfficer,Lon
     """)
     Page<PoliceOfficer> getPoliceOfficersByStation(Pageable pageable, Boolean isActive, String key, String stationUid);
 
-    @Query("select p from PoliceOfficer p where p.userAccount.uid = :userUid and p.isActive=true")
+    @Query("select p from PoliceOfficer p where p.userAccount.uid = :userUid and p.isActive = true")
     Optional<PoliceOfficer> findByUserUidAndIsActiveTrue(String userUid);
 
     boolean existsByUserAccount(User user);
@@ -44,13 +46,14 @@ public interface PoliceOfficerRepository extends JpaRepository<PoliceOfficer,Lon
     List<PoliceOfficer> findByIsActiveTrue();
 
     @Query("""
-    select p from PoliceOfficer p where p.station.uid=:stationUid and p.isActive=true
+    select p from PoliceOfficer p where p.policeStation.uid = :stationUid and p.isActive = true
     order by case p.code
       when 'ISP'   then 1 when 'A_ISP' then 2 when 'SM'    then 3
       when 'S_SGT' then 4 when 'SGT'   then 5 when 'CPL'   then 6
       when 'PC'    then 7 else 8 end asc
     """)
-    List<PoliceOfficer> findByStationUidAndIsActiveTrue(String stationUid);
+    List<PoliceOfficer> findByPoliceStationUidAndIsActiveTrue(String stationUid);
 
     PoliceOfficer findByUserAccount(User user);
+
 }

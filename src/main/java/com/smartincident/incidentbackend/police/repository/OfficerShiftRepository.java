@@ -24,7 +24,7 @@ public interface OfficerShiftRepository extends JpaRepository<OfficerShift,Long>
     """)
     Page<OfficerShift> getPoliceOfficerShifts(Pageable pageable, Boolean isActive, String key);
 
-    @Query("select o from OfficerShift o where lower(concat(o.officer.userAccount.name, o.officer.userAccount.phoneNumber)) like %:key% and (:isActive is null or o.isActive=:isActive) and o.officer.station.uid = :stationUid")
+    @Query("select o from OfficerShift o where lower(concat(o.officer.userAccount.name, o.officer.userAccount.phoneNumber)) like %:key% and (:isActive is null or o.isActive=:isActive) and o.officer.policeStation.uid = :stationUid")
     Page<OfficerShift> getShiftsByStation(Pageable pageable, Boolean isActive, String key, String stationUid);
 
     @Query("select o from OfficerShift o where lower(concat(o.officer.userAccount.name, o.officer.userAccount.phoneNumber)) like %:key% and (:isActive is null or o.isActive=:isActive) and o.officer.uid = :policeOfficerUid")
@@ -36,7 +36,7 @@ public interface OfficerShiftRepository extends JpaRepository<OfficerShift,Long>
 
 
     @Query("SELECT s FROM OfficerShift s " +
-            "WHERE s.officer.station.uid = :stationUid " +
+            "WHERE s.officer.policeStation.uid = :stationUid " +
             "AND s.shiftDate = :date " +
             "AND s.isDeleted = false")
     List<OfficerShift> findByStationAndDate(@Param("stationUid") String stationUid, @Param("date") LocalDate date);

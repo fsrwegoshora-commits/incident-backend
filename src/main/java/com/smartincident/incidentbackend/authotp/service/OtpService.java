@@ -5,6 +5,9 @@ import com.smartincident.incidentbackend.authotp.entity.OtpCode;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.repository.OtpCodeRepository;
 import com.smartincident.incidentbackend.authotp.repository.UserRepository;
+import com.smartincident.incidentbackend.enums.Permission;
+import com.smartincident.incidentbackend.permission.service.PermissionService;
+import com.smartincident.incidentbackend.session.service.DeviceSessionService;
 import com.smartincident.incidentbackend.utils.Response;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +19,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -25,6 +29,8 @@ public class OtpService {
     private final OtpCodeRepository otpCodeRepository;
     private final UserRepository userRepository;
     private final JwtService jwtService;
+    private final PermissionService permissionService;
+    private final DeviceSessionService deviceSessionService;
 
     @Value("${app.otp.expose-in-response:true}")
     private boolean exposeOtpInResponse;
@@ -120,6 +126,12 @@ public class OtpService {
      * Throws RuntimeException with a descriptive message on any failure.
      */
     public AuthResponse loginWithOtp(String phoneNumber, String code) {
+        return loginWithOtp(phoneNumber, code, null, null, null, null);
+    }
+
+    public AuthResponse loginWithOtp(String phoneNumber, String code,
+                                     String deviceId, String deviceName,
+                                     String platform, String ipAddress) {
         Response<Boolean> otpResponse = verifyOtp(phoneNumber, code);
         if (!otpResponse.success() || Boolean.FALSE.equals(otpResponse.getData())) {
             throw new RuntimeException(otpResponse.getMessage());
@@ -128,15 +140,23 @@ public class OtpService {
         User user = userRepository.findByPhoneNumber(phoneNumber.trim())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        String accessToken = jwtService.generateToken(user);
+        String accessToken  = jwtService.generateToken(user);
         String refreshToken = jwtService.generateRefreshToken(user);
+        Set<Permission> permissions = permissionService.getPermissionsForRole(user.getRole());
+
+        // Async — never blocks login
+        deviceSessionService.recordLogin(
+                user.getUid(), user.getName(),
+                user.getRole() != null ? user.getRole().name() : null,
+                deviceId, deviceName, platform, ipAddress);
 
         return new AuthResponse(
                 accessToken,
                 refreshToken,
                 user.getPhoneNumber(),
                 user.getRole(),
-                user.getStation() != null ? user.getStation().getUid() : null
+                user.getEmergencyUnit() != null ? user.getEmergencyUnit().getUid() : null,
+                permissions
         );
     }
 }

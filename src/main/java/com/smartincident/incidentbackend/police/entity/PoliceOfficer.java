@@ -3,7 +3,6 @@ package com.smartincident.incidentbackend.police.entity;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.enums.OfficerRank;
 import com.smartincident.incidentbackend.entity.BaseEntity;
-import com.smartincident.incidentbackend.setting.entity.Agency;
 import com.smartincident.incidentbackend.setting.entity.Department;
 import jakarta.persistence.*;
 import lombok.Getter;
@@ -21,9 +20,10 @@ public class PoliceOfficer extends BaseEntity {
     @Enumerated(EnumType.STRING)
     private OfficerRank code;
 
-    @ManyToOne
-    @JoinColumn(name = "station_id")
-    private PoliceStation station;
+    /** The police station this officer is posted to. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "police_station_id", nullable = false)
+    private PoliceStation policeStation;
 
     @ManyToOne
     @JoinColumn(name = "department_id", nullable = false)

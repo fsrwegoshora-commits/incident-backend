@@ -1,0 +1,83 @@
+version: '3.9'
+
+services:
+
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: sirs_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${DB_NAME:-sirs_db}
+      POSTGRES_USER:     ${DB_USER:-sirs_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-sirs_pass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-sirs_user} -d ${DB_NAME:-sirs_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis (caching + session) ────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: sirs_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_pass}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_pass}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Spring Boot Backend ──────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sirs_backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL:      jdbc:postgresql://postgres:5432/${DB_NAME:-sirs_db}
+      SPRING_DATASOURCE_USERNAME: ${DB_USER:-sirs_user}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-sirs_pass}
+      SPRING_REDIS_HOST:          redis
+      SPRING_REDIS_PORT:          6379
+      SPRING_REDIS_PASSWORD:      ${REDIS_PASSWORD:-redis_pass}
+      JWT_SECRET:                 ${JWT_SECRET:-change_me_in_production_32chars}
+      APP_SEED_ROOT_PHONE:        ${ROOT_PHONE:-+255000000000}
+      APP_SEED_ROOT_NAME:         ${ROOT_NAME:-System Administrator}
+      APP_OTP_EXPOSE_IN_RESPONSE: ${OTP_EXPOSE:-false}
+      SPRING_MAIL_HOST:           ${MAIL_HOST:-smtp.gmail.com}
+      SPRING_MAIL_PORT:           ${MAIL_PORT:-587}
+      SPRING_MAIL_USERNAME:       ${MAIL_USER:-}
+      SPRING_MAIL_PASSWORD:       ${MAIL_PASS:-}
+    volumes:
+      - uploads:/app/uploads
+      # Mount Firebase key as a secret in production:
+      # - ./firebase-service-account.json:/app/firebase-service-account.json:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads:

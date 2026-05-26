@@ -20,8 +20,8 @@ public class StationAppointment extends BaseEntity {
     private PoliceOfficer officer;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "station_id", nullable = false)
-    private PoliceStation station;
+    @JoinColumn(name = "police_station_id", nullable = false)
+    private PoliceStation policeStation;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "position", nullable = false)

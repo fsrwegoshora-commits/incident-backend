@@ -5,8 +5,8 @@ import com.smartincident.incidentbackend.police.dto.AppointmentDto;
 import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
 import com.smartincident.incidentbackend.police.entity.StationAppointment;
-import com.smartincident.incidentbackend.police.repository.PoliceOfficerRepository;
 import com.smartincident.incidentbackend.police.repository.PoliceStationRepository;
+import com.smartincident.incidentbackend.police.repository.PoliceOfficerRepository;
 import com.smartincident.incidentbackend.police.repository.StationAppointmentRepository;
 import com.smartincident.incidentbackend.utils.PageableParam;
 import com.smartincident.incidentbackend.utils.Response;
@@ -28,7 +28,7 @@ public class AppointmentService {
 
     private final StationAppointmentRepository appointmentRepository;
     private final PoliceOfficerRepository officerRepository;
-    private final PoliceStationRepository stationRepository;
+    private final PoliceStationRepository policeStationRepository;
 
     @Transactional
     public Response<StationAppointment> saveAppointment(AppointmentDto dto) {
@@ -52,12 +52,12 @@ public class AppointmentService {
                 .orElse(null);
         if (officer == null) return Response.error("Officer not found");
 
-        PoliceStation station = stationRepository.findByUid(dto.getStationUid())
+        PoliceStation station = policeStationRepository.findByUid(dto.getStationUid())
                 .orElse(null);
-        if (station == null) return Response.error("Station not found");
+        if (station == null) return Response.error("Police station not found");
 
         appointment.setOfficer(officer);
-        appointment.setStation(station);
+        appointment.setPoliceStation(station);
         appointment.setPosition(dto.getPosition());
         appointment.setStatus(dto.getStatus() != null ? dto.getStatus() : AppointmentStatus.ACTIVE);
         appointment.setStartDate(dto.getStartDate());
@@ -68,7 +68,6 @@ public class AppointmentService {
 
         try {
             StationAppointment saved = appointmentRepository.save(appointment);
-            log.info("Appointment saved for officer {} at station {}", officer.getBadgeNumber(), station.getName());
             return Response.success(saved);
         } catch (Exception e) {
             log.error("Failed to save appointment: {}", e.getMessage());

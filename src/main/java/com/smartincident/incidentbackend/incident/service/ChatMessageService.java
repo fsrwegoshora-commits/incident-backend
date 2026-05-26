@@ -3,6 +3,7 @@ package com.smartincident.incidentbackend.incident.service;
 import com.smartincident.incidentbackend.enums.IncidentStatus;
 import com.smartincident.incidentbackend.enums.NotificationChannel;
 import com.smartincident.incidentbackend.enums.NotificationType;
+import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.incident.dto.ChatMessageDto;
 import com.smartincident.incidentbackend.incident.entity.ChatMessage;
 import com.smartincident.incidentbackend.incident.entity.IncidentReport;
@@ -179,13 +180,14 @@ public class ChatMessageService {
             return true;
         }
 
-        // Station admin or root can chat
-        if (sender.getRole().name().equals("STATION_ADMIN") ||
-                sender.getRole().name().equals("ROOT")) {
-            if (sender.getStation() != null &&
-                    sender.getStation().getUid() != null &&
-                    incident.getAssignedStation() != null &&
-                    sender.getStation().getUid().equals(incident.getAssignedStation().getUid())) {
+        // Unit admin, dispatcher, or root can chat
+        if (sender.getRole() == Role.STATION_ADMIN ||
+                sender.getRole() == Role.DISPATCHER ||
+                sender.getRole() == Role.ROOT) {
+            if (sender.getEmergencyUnit() != null &&
+                    sender.getEmergencyUnit().getUid() != null &&
+                    incident.getAssignedUnit() != null &&
+                    sender.getEmergencyUnit().getUid().equals(incident.getAssignedUnit().getUid())) {
                 return true;
             }
         }

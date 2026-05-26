@@ -18,7 +18,7 @@ public interface StationAppointmentRepository extends JpaRepository<StationAppoi
 
     @Query("""
         select a from StationAppointment a
-        where a.station.uid = :stationUid and a.isActive = true
+        where a.policeStation.uid = :stationUid and a.isActive = true
         order by case a.position
           when 'OFFICER_IN_CHARGE'        then 1
           when 'DEPUTY_OFFICER_IN_CHARGE' then 2
@@ -35,7 +35,7 @@ public interface StationAppointmentRepository extends JpaRepository<StationAppoi
 
     @Query("""
         select a from StationAppointment a
-        where a.station.uid = :stationUid
+        where a.policeStation.uid = :stationUid
           and (:status is null or a.status = :status)
           and a.isActive = true
         order by case a.position
@@ -58,4 +58,15 @@ public interface StationAppointmentRepository extends JpaRepository<StationAppoi
         order by a.startDate desc
         """)
     List<StationAppointment> findByOfficerUid(String officerUid);
+
+    /** UIDs of officers at a station whose active appointment position is one of the given positions. */
+    @Query("""
+        select a.officer.uid from StationAppointment a
+        where a.policeStation.uid = :stationUid
+          and a.position in :positions
+          and a.status = com.smartincident.incidentbackend.enums.AppointmentStatus.ACTIVE
+          and a.isActive = true
+        """)
+    List<String> findOfficerUidsByStationAndPositions(String stationUid,
+            List<com.smartincident.incidentbackend.enums.AppointmentPosition> positions);
 }

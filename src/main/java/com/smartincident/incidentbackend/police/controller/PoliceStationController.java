@@ -74,9 +74,10 @@ public class PoliceStationController {
 
         List<PoliceStation> stations;
         if (user.getRole() == Role.ROOT) {
-            stations = getAllStations().getData();
+            stations = policeStationRepository.findAll();
         } else {
-            stations = user.getStation() != null ? List.of(user.getStation()) : List.of();
+            stations = user.getPoliceStation() != null
+                    ? List.of(user.getPoliceStation()) : List.of();
         }
 
         List<PoliceStationDto> stationDtos = stations.stream().map(station -> {

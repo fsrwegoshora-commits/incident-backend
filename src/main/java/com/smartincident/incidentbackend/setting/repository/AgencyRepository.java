@@ -17,5 +17,5 @@ public interface AgencyRepository extends JpaRepository<Agency, Long> {
 
     boolean existsByCode(String trim);
 
-    Optional<Object> findByCode(String police);
+    Optional<Agency> findByCode(String code);
 }

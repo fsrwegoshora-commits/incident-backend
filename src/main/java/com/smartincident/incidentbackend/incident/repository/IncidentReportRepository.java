@@ -16,15 +16,14 @@ import java.util.Optional;
 @Repository
 public interface IncidentReportRepository extends JpaRepository<IncidentReport, Long> {
 
-    // Find by UID
     Optional<IncidentReport> findByUid(String uid);
 
-    // Find by reporter (Citizen)
+    // ── Citizen: incidents reported by a user ──────────────────────────────
     @Query("SELECT i FROM IncidentReport i WHERE i.reportedBy.uid = :userUid " +
-            "AND (:isActive IS NULL OR i.isActive = :isActive) " +
-            "AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :key, '%')) " +
-            "OR LOWER(i.description) LIKE LOWER(CONCAT('%', :key, '%'))) " +
-            "ORDER BY i.reportedAt DESC")
+           "AND (:isActive IS NULL OR i.isActive = :isActive) " +
+           "AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :key, '%')) " +
+           "OR LOWER(i.description) LIKE LOWER(CONCAT('%', :key, '%'))) " +
+           "ORDER BY i.reportedAt DESC")
     Page<IncidentReport> findByReporter(
             @Param("userUid") String userUid,
             @Param("isActive") Boolean isActive,
@@ -32,14 +31,29 @@ public interface IncidentReportRepository extends JpaRepository<IncidentReport, 
             Pageable pageable
     );
 
-    // Find by police station
-    @Query("SELECT i FROM IncidentReport i WHERE i.assignedStation.uid = :stationUid " +
-            "AND (:isActive IS NULL OR i.isActive = :isActive) " +
-            "AND (:status IS NULL OR i.status = :status) " +
-            "AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :key, '%')) " +
-            "OR LOWER(i.description) LIKE LOWER(CONCAT('%', :key, '%'))) " +
-            "ORDER BY i.reportedAt DESC")
-    Page<IncidentReport> findByStation(
+    // ── Fire / Medical unit: incidents assigned to an EmergencyUnit ────────
+    @Query("SELECT i FROM IncidentReport i WHERE i.assignedUnit.uid = :unitUid " +
+           "AND (:isActive IS NULL OR i.isActive = :isActive) " +
+           "AND (:status IS NULL OR i.status = :status) " +
+           "AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :key, '%')) " +
+           "OR LOWER(i.description) LIKE LOWER(CONCAT('%', :key, '%'))) " +
+           "ORDER BY i.reportedAt DESC")
+    Page<IncidentReport> findByEmergencyUnit(
+            @Param("unitUid") String unitUid,
+            @Param("status") IncidentStatus status,
+            @Param("isActive") Boolean isActive,
+            @Param("key") String key,
+            Pageable pageable
+    );
+
+    // ── Police: incidents assigned to a PoliceStation ──────────────────────
+    @Query("SELECT i FROM IncidentReport i WHERE i.assignedPoliceStation.uid = :stationUid " +
+           "AND (:isActive IS NULL OR i.isActive = :isActive) " +
+           "AND (:status IS NULL OR i.status = :status) " +
+           "AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :key, '%')) " +
+           "OR LOWER(i.description) LIKE LOWER(CONCAT('%', :key, '%'))) " +
+           "ORDER BY i.reportedAt DESC")
+    Page<IncidentReport> findByPoliceStation(
             @Param("stationUid") String stationUid,
             @Param("status") IncidentStatus status,
             @Param("isActive") Boolean isActive,
@@ -47,13 +61,13 @@ public interface IncidentReportRepository extends JpaRepository<IncidentReport, 
             Pageable pageable
     );
 
-    // Find by assigned officer
+    // ── Assigned officer ───────────────────────────────────────────────────
     @Query("SELECT i FROM IncidentReport i WHERE i.assignedOfficer.uid = :officerUid " +
-            "AND (:isActive IS NULL OR i.isActive = :isActive) " +
-            "AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :key, '%')) " +
-            "OR LOWER(i.description) LIKE LOWER(CONCAT('%', :key, '%'))) " +
-            "AND (:status IS NULL OR i.status = :status) " +
-            "ORDER BY i.reportedAt DESC")
+           "AND (:isActive IS NULL OR i.isActive = :isActive) " +
+           "AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :key, '%')) " +
+           "OR LOWER(i.description) LIKE LOWER(CONCAT('%', :key, '%'))) " +
+           "AND (:status IS NULL OR i.status = :status) " +
+           "ORDER BY i.reportedAt DESC")
     Page<IncidentReport> findByOfficer(
             @Param("officerUid") String officerUid,
             @Param("status") IncidentStatus status,
@@ -62,15 +76,15 @@ public interface IncidentReportRepository extends JpaRepository<IncidentReport, 
             Pageable pageable
     );
 
-    // Find nearby incidents (within radius)
+    // ── Nearby incidents (Haversine, native query) ─────────────────────────
     @Query(value = "SELECT * FROM incidents i " +
-            "WHERE (6371 * acos(cos(radians(:latitude)) * cos(radians(i.latitude)) * " +
-            "cos(radians(i.longitude) - radians(:longitude)) + sin(radians(:latitude)) * " +
-            "sin(radians(i.latitude)))) <= :radiusKm " +
-            "AND (:status IS NULL OR i.status = :status) " +
-            "AND i.is_active = true " +
-            "ORDER BY i.reported_at DESC",
-            nativeQuery = true)
+                   "WHERE (6371 * acos(cos(radians(:latitude)) * cos(radians(i.latitude)) * " +
+                   "cos(radians(i.longitude) - radians(:longitude)) + sin(radians(:latitude)) * " +
+                   "sin(radians(i.latitude)))) <= :radiusKm " +
+                   "AND (:status IS NULL OR i.status = :status) " +
+                   "AND i.is_active = true " +
+                   "ORDER BY i.reported_at DESC",
+           nativeQuery = true)
     List<IncidentReport> findNearbyIncidents(
             @Param("latitude") Double latitude,
             @Param("longitude") Double longitude,
@@ -78,24 +92,137 @@ public interface IncidentReportRepository extends JpaRepository<IncidentReport, 
             @Param("status") String status
     );
 
-    // Count by status for station
-    @Query("SELECT COUNT(i) FROM IncidentReport i " +
-            "WHERE i.assignedStation.uid = :stationUid " +
-            "AND i.status = :status " +
-            "AND i.isActive = true")
-    Long countByStationAndStatus(
-            @Param("stationUid") String stationUid,
-            @Param("status") IncidentStatus status
-    );
+    // ── Statistics ────────────────────────────────────────────────────────
 
-    // Recent incidents (last 24 hours)
+    @Query("SELECT COUNT(i) FROM IncidentReport i " +
+           "WHERE i.assignedUnit.uid = :unitUid AND i.status = :status AND i.isActive = true")
+    Long countByUnitAndStatus(@Param("unitUid") String unitUid, @Param("status") IncidentStatus status);
+
+    @Query("SELECT COUNT(i) FROM IncidentReport i " +
+           "WHERE i.assignedPoliceStation.uid = :stationUid AND i.status = :status AND i.isActive = true")
+    Long countByPoliceStationAndStatus(
+            @Param("stationUid") String stationUid, @Param("status") IncidentStatus status);
+
+    /** @deprecated Use countByUnitAndStatus or countByPoliceStationAndStatus */
+    @Deprecated
+    @Query("SELECT COUNT(i) FROM IncidentReport i " +
+           "WHERE (i.assignedUnit.uid = :stationUid OR i.assignedPoliceStation.uid = :stationUid) " +
+           "AND i.status = :status AND i.isActive = true")
+    Long countByStationAndStatus(
+            @Param("stationUid") String stationUid, @Param("status") IncidentStatus status);
+
     @Query("SELECT i FROM IncidentReport i " +
-            "WHERE i.reportedAt >= :since " +
-            "AND (:stationUid IS NULL OR i.assignedStation.uid = :stationUid) " +
-            "AND i.isActive = true " +
-            "ORDER BY i.reportedAt DESC")
+           "WHERE i.reportedAt >= :since " +
+           "AND (:stationUid IS NULL " +
+           "     OR i.assignedUnit.uid = :stationUid " +
+           "     OR i.assignedPoliceStation.uid = :stationUid) " +
+           "AND i.isActive = true " +
+           "ORDER BY i.reportedAt DESC")
     List<IncidentReport> findRecentIncidents(
             @Param("since") LocalDateTime since,
             @Param("stationUid") String stationUid
     );
+
+    // ── Dispatch Queue: incidents assigned to a specific dispatcher ───────────
+
+    @Query("SELECT i FROM IncidentReport i " +
+           "WHERE i.assignedDispatcher.uid = :dispatcherUid " +
+           "AND i.isActive = true " +
+           "AND (:status IS NULL OR i.status = :status) " +
+           "AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :key, '%')) " +
+           "  OR LOWER(i.description) LIKE LOWER(CONCAT('%', :key, '%'))) " +
+           "ORDER BY i.reportedAt DESC")
+    Page<IncidentReport> findDispatchQueue(
+            @Param("dispatcherUid") String dispatcherUid,
+            @Param("status") IncidentStatus status,
+            @Param("key") String key,
+            Pageable pageable);
+
+    /** All incidents assigned to any dispatcher in a specific dispatch center. */
+    @Query("SELECT i FROM IncidentReport i " +
+           "WHERE i.assignedDispatcher.emergencyUnit.uid = :centerUid " +
+           "AND i.isActive = true " +
+           "AND (:status IS NULL OR i.status = :status) " +
+           "AND (LOWER(i.title) LIKE LOWER(CONCAT('%', :key, '%')) " +
+           "  OR LOWER(i.description) LIKE LOWER(CONCAT('%', :key, '%'))) " +
+           "ORDER BY i.reportedAt DESC")
+    Page<IncidentReport> findDispatchQueueByCenter(
+            @Param("centerUid") String centerUid,
+            @Param("status") IncidentStatus status,
+            @Param("key") String key,
+            Pageable pageable);
+
+    /** All active operational incidents (DISPATCHED through IN_PROGRESS) for real-time monitoring. */
+    @Query("SELECT i FROM IncidentReport i " +
+           "WHERE i.isActive = true " +
+           "AND i.status IN (" +
+           "  com.smartincident.incidentbackend.enums.IncidentStatus.DISPATCHED, " +
+           "  com.smartincident.incidentbackend.enums.IncidentStatus.ACKNOWLEDGED, " +
+           "  com.smartincident.incidentbackend.enums.IncidentStatus.EN_ROUTE, " +
+           "  com.smartincident.incidentbackend.enums.IncidentStatus.AT_SCENE, " +
+           "  com.smartincident.incidentbackend.enums.IncidentStatus.IN_PROGRESS) " +
+           "ORDER BY i.reportedAt DESC")
+    List<IncidentReport> findOperationalIncidents();
+
+    /** Count unresolved incidents assigned to a dispatcher — used for least-active load balancing. */
+    @Query("SELECT COUNT(i) FROM IncidentReport i " +
+           "WHERE i.assignedDispatcher.uid = :uid " +
+           "AND i.isActive = true " +
+           "AND i.status NOT IN (" +
+           "  com.smartincident.incidentbackend.enums.IncidentStatus.RESOLVED, " +
+           "  com.smartincident.incidentbackend.enums.IncidentStatus.CLOSED, " +
+           "  com.smartincident.incidentbackend.enums.IncidentStatus.REJECTED)")
+    Long countActiveIncidentsByDispatcher(@Param("uid") String uid);
+
+    @Query("SELECT COUNT(i) FROM IncidentReport i " +
+           "WHERE i.assignedDispatcher.uid = :dispatcherUid " +
+           "AND i.status = :status AND i.isActive = true")
+    Long countByDispatcherAndStatus(
+            @Param("dispatcherUid") String dispatcherUid,
+            @Param("status") IncidentStatus status);
+
+    // ── Analytics ─────────────────────────────────────────────────────────────
+
+    @Query("SELECT COUNT(i) FROM IncidentReport i WHERE i.isActive = true " +
+           "AND (:agencyUid IS NULL OR i.leadAgency.uid = :agencyUid)")
+    Long countTotal(@Param("agencyUid") String agencyUid);
+
+    @Query("SELECT COUNT(i) FROM IncidentReport i WHERE i.isActive = true " +
+           "AND i.status = :status " +
+           "AND (:agencyUid IS NULL OR i.leadAgency.uid = :agencyUid)")
+    Long countByStatus(@Param("status") IncidentStatus status, @Param("agencyUid") String agencyUid);
+
+    @Query("SELECT i.type, COUNT(i) FROM IncidentReport i WHERE i.isActive = true " +
+           "AND (:agencyUid IS NULL OR i.leadAgency.uid = :agencyUid) " +
+           "GROUP BY i.type ORDER BY COUNT(i) DESC")
+    List<Object[]> countGroupedByType(@Param("agencyUid") String agencyUid);
+
+    @Query("SELECT CAST(i.reportedAt AS date), COUNT(i) FROM IncidentReport i " +
+           "WHERE i.isActive = true " +
+           "AND i.reportedAt >= :since " +
+           "AND (:agencyUid IS NULL OR i.leadAgency.uid = :agencyUid) " +
+           "GROUP BY CAST(i.reportedAt AS date) ORDER BY CAST(i.reportedAt AS date)")
+    List<Object[]> countGroupedByDay(@Param("since") LocalDateTime since, @Param("agencyUid") String agencyUid);
+
+    // ── Performance metrics ───────────────────────────────────────────────────
+
+    @Query("SELECT i FROM IncidentReport i WHERE i.isActive = true AND i.dispatchedAt IS NOT NULL " +
+           "AND (:agencyUid IS NULL OR i.leadAgency.uid = :agencyUid)")
+    List<IncidentReport> findDispatchedIncidents(@Param("agencyUid") String agencyUid);
+
+    /** Returns [dispatcher_uid, dispatcher_name, total_count, active_count] per dispatcher */
+    @Query("SELECT i.assignedDispatcher.uid, i.assignedDispatcher.name, COUNT(i), " +
+           "SUM(CASE WHEN i.status NOT IN (" +
+           "  com.smartincident.incidentbackend.enums.IncidentStatus.RESOLVED, " +
+           "  com.smartincident.incidentbackend.enums.IncidentStatus.CLOSED, " +
+           "  com.smartincident.incidentbackend.enums.IncidentStatus.REJECTED) THEN 1L ELSE 0L END) " +
+           "FROM IncidentReport i " +
+           "WHERE i.isActive = true AND i.assignedDispatcher IS NOT NULL " +
+           "GROUP BY i.assignedDispatcher.uid, i.assignedDispatcher.name " +
+           "ORDER BY COUNT(i) DESC")
+    List<Object[]> findDispatcherWorkload();
+
+    @Query("SELECT COUNT(i) FROM IncidentReport i WHERE i.isActive = true AND i.escalatedAt IS NOT NULL " +
+           "AND (:agencyUid IS NULL OR i.leadAgency.uid = :agencyUid)")
+    Long countEscalated(@Param("agencyUid") String agencyUid);
 }

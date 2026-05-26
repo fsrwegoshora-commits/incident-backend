@@ -1,10 +1,24 @@
 package com.smartincident.incidentbackend.utils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.smartincident.incidentbackend.authotp.entity.User;
+import com.smartincident.incidentbackend.authotp.repository.UserRepository;
+import com.smartincident.incidentbackend.enums.Permission;
+import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.permission.entity.PermissionEntity;
+import com.smartincident.incidentbackend.permission.entity.RolePermission;
+import com.smartincident.incidentbackend.permission.repository.PermissionRepository;
+import com.smartincident.incidentbackend.permission.repository.RolePermissionRepository;
+import com.smartincident.incidentbackend.emergency.entity.EmergencyUnit;
+import com.smartincident.incidentbackend.emergency.repository.EmergencyUnitRepository;
+import com.smartincident.incidentbackend.enums.UnitLevel;
+import com.smartincident.incidentbackend.enums.UnitType;
 import com.smartincident.incidentbackend.setting.entity.AdministrativeArea;
+import com.smartincident.incidentbackend.setting.entity.Agency;
 import com.smartincident.incidentbackend.setting.entity.AreaLevel;
 import com.smartincident.incidentbackend.setting.entity.AreaType;
 import com.smartincident.incidentbackend.setting.repository.AdministrativeAreaRepository;
+import com.smartincident.incidentbackend.setting.repository.AgencyRepository;
 import com.smartincident.incidentbackend.setting.repository.AreaLevelRepository;
 import com.smartincident.incidentbackend.setting.repository.AreaTypeRepository;
 import com.univocity.parsers.common.record.Record;
@@ -12,18 +26,19 @@ import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Log
@@ -33,7 +48,26 @@ public class Initializer implements ApplicationRunner {
     private final AdministrativeAreaRepository administrativeAreaRepository;
     private final AreaLevelRepository areaLevelRepository;
     private final AreaTypeRepository areaTypeRepository;
+    private final PermissionRepository permissionRepository;
+    private final RolePermissionRepository rolePermissionRepository;
+    private final UserRepository userRepository;
+    private final AgencyRepository agencyRepository;
+    private final EmergencyUnitRepository emergencyUnitRepository;
+    private final JdbcTemplate jdbcTemplate;
+    private final BCryptPasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Value("${app.seed.root.phone:+255000000000}")
+    private String rootPhone;
+
+    @Value("${app.seed.root.name:System Administrator}")
+    private String rootName;
+
+    @Value("${app.seed.root.username:admin}")
+    private String rootUsername;
+
+    @Value("${app.seed.root.password:Admin@1234}")
+    private String rootPassword;
 
     public void seedAdministrativeArea() {
         log.info("*** Seeding Administrative areas ***");
@@ -157,10 +191,212 @@ public class Initializer implements ApplicationRunner {
         }
     }
 
+    public void dropStaleRoleConstraint() {
+        // PostgreSQL CHECK constraint on users.role was generated from the old enum values.
+        // Drop it so the migration and new role values are accepted. Java enum is the real guard.
+        try {
+            jdbcTemplate.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check");
+            log.info("Dropped stale users_role_check constraint (if it existed)");
+        } catch (Exception e) {
+            log.warning("Could not drop users_role_check constraint: " + e.getMessage());
+        }
+    }
+
+    public void dropStaleUnitTypeConstraint() {
+        try {
+            jdbcTemplate.execute("ALTER TABLE emergency_units DROP CONSTRAINT IF EXISTS emergency_units_unit_type_check");
+            log.info("Dropped stale emergency_units_unit_type_check constraint (if it existed)");
+        } catch (Exception e) {
+            log.warning("Could not drop emergency_units_unit_type_check constraint: " + e.getMessage());
+        }
+    }
+
+    public void dropStaleIncidentStatusConstraint() {
+        try {
+            jdbcTemplate.execute("ALTER TABLE incidents DROP CONSTRAINT IF EXISTS incidents_status_check");
+            log.info("Dropped stale incidents_status_check constraint (if it existed)");
+        } catch (Exception e) {
+            log.warning("Could not drop incidents_status_check constraint: " + e.getMessage());
+        }
+    }
+
+    public void dropStalePermissionConstraint() {
+        // PostgreSQL CHECK constraint on permissions.name was generated from the old enum values.
+        // Drop it so new Permission enum values (VIEW_OWN_INCIDENTS, UPDATE_OWN_PROFILE, etc.) are accepted.
+        try {
+            jdbcTemplate.execute("ALTER TABLE permissions DROP CONSTRAINT IF EXISTS permissions_name_check");
+            log.info("Dropped stale permissions_name_check constraint (if it existed)");
+        } catch (Exception e) {
+            log.warning("Could not drop permissions_name_check constraint: " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    public void migrateOldRoles() {
+        int agencyRep  = userRepository.migrateRole(Role.AGENCY_REP,          Role.AGENCY_ADMIN);
+        int fireAdmin  = userRepository.migrateRole(Role.FIRE_STATION_ADMIN,   Role.STATION_ADMIN);
+        int medAdmin   = userRepository.migrateRole(Role.MEDICAL_STATION_ADMIN, Role.STATION_ADMIN);
+        if (agencyRep + fireAdmin + medAdmin > 0) {
+            log.info("Role migration: " + agencyRep + " AGENCY_REP→AGENCY_ADMIN, "
+                    + fireAdmin + " FIRE_STATION_ADMIN→STATION_ADMIN, "
+                    + medAdmin + " MEDICAL_STATION_ADMIN→STATION_ADMIN");
+        }
+    }
+
+    public void seedPermissions() {
+        log.info("*** Seeding permissions ***");
+
+        // Ensure every Permission enum value has a DB row (upsert description + category)
+        for (Permission p : Permission.values()) {
+            permissionRepository.findByName(p).ifPresentOrElse(
+                existing -> {
+                    if (existing.getCategory() == null) {
+                        existing.setCategory(p.getCategory());
+                        permissionRepository.save(existing);
+                    }
+                },
+                () -> permissionRepository.save(PermissionEntity.builder()
+                        .name(p)
+                        .description(p.name().replace("_", " "))
+                        .category(p.getCategory())
+                        .build())
+            );
+        }
+
+        // Default role → permission mappings
+        Map<Role, Set<Permission>> defaults = new LinkedHashMap<>();
+        defaults.put(Role.ROOT,         EnumSet.allOf(Permission.class));
+        defaults.put(Role.AGENCY_ADMIN, EnumSet.of(
+                Permission.CREATE_USER, Permission.UPDATE_USER, Permission.DELETE_USER,
+                Permission.ASSIGN_ROLE, Permission.MANAGE_AGENCY, Permission.MANAGE_STATIONS,
+                Permission.VIEW_ANALYTICS, Permission.VIEW_AUDIT_LOGS,
+                Permission.DISPATCH_INCIDENT, Permission.UPDATE_INCIDENT, Permission.CLOSE_INCIDENT,
+                Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES));
+        defaults.put(Role.STATION_ADMIN, EnumSet.of(
+                Permission.CREATE_USER, Permission.UPDATE_USER,
+                Permission.MANAGE_VEHICLES, Permission.MANAGE_STATIONS, Permission.MANAGE_CHECKPOINTS,
+                Permission.VIEW_ANALYTICS, Permission.DISPATCH_INCIDENT,
+                Permission.UPDATE_INCIDENT, Permission.CLOSE_INCIDENT,
+                Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES));
+        defaults.put(Role.DISPATCHER, EnumSet.of(
+                Permission.DISPATCH_INCIDENT, Permission.UPDATE_INCIDENT,
+                Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES));
+        defaults.put(Role.POLICE_OFFICER, EnumSet.of(
+                Permission.CREATE_INCIDENT, Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE,
+                Permission.VIEW_VEHICLES));
+        defaults.put(Role.FIRE_OFFICER, EnumSet.of(
+                Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE));
+        defaults.put(Role.MEDIC, EnumSet.of(
+                Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE));
+        defaults.put(Role.CITIZEN, EnumSet.of(
+                Permission.CREATE_INCIDENT, Permission.UPLOAD_EVIDENCE,
+                Permission.VIEW_OWN_INCIDENTS, Permission.UPDATE_OWN_PROFILE));
+
+        for (Map.Entry<Role, Set<Permission>> entry : defaults.entrySet()) {
+            String roleName = entry.getKey().name();
+            for (Permission p : entry.getValue()) {
+                if (rolePermissionRepository.findByRoleAndPermission(roleName, p).isEmpty()) {
+                    PermissionEntity pe = permissionRepository.findByName(p).orElseThrow();
+                    rolePermissionRepository.save(RolePermission.builder()
+                            .role(roleName)
+                            .permission(pe)
+                            .build());
+                }
+            }
+        }
+
+        log.info("*** Done seeding permissions ***");
+    }
+
+    public void seedDefaultAgencies() {
+        log.info("*** Seeding default agencies ***");
+        Map<String, String> defaults = new LinkedHashMap<>();
+        defaults.put("POLICE",    "Tanzania Police Force");
+        defaults.put("FIRE",      "Tanzania Fire and Rescue");
+        defaults.put("AMBULANCE", "Tanzania Emergency Medical Services");
+
+        defaults.forEach((code, name) -> {
+            if (!agencyRepository.existsByCode(code)) {
+                Agency agency = new Agency();
+                agency.setCode(code);
+                agency.setName(name);
+                agencyRepository.save(agency);
+                log.info("Seeded agency: " + code);
+            }
+        });
+        log.info("*** Done seeding default agencies ***");
+    }
+
+    public void seedRootUser() {
+        log.info("*** Seeding ROOT user ***");
+        List<User> roots = userRepository.findByRole(Role.ROOT);
+        if (!roots.isEmpty()) {
+            // Backfill username/password if the existing root was created before this feature
+            User root = roots.get(0);
+            boolean changed = false;
+            if (root.getUsername() == null) {
+                if (!userRepository.existsByUsername(rootUsername)) {
+                    root.setUsername(rootUsername);
+                    changed = true;
+                }
+            }
+            if (root.getPasswordHash() == null) {
+                root.setPasswordHash(passwordEncoder.encode(rootPassword));
+                changed = true;
+            }
+            if (changed) {
+                userRepository.save(root);
+                log.info("Backfilled username/password for existing ROOT user");
+            } else {
+                log.info("ROOT user already exists. Skipping...");
+            }
+            return;
+        }
+        User root = new User();
+        root.setName(rootName);
+        root.setPhoneNumber(rootPhone);
+        root.setUsername(rootUsername);
+        root.setPasswordHash(passwordEncoder.encode(rootPassword));
+        root.setRole(Role.ROOT);
+        root.setVerified(true);
+        root.setIsActive(true);
+        root.setIsDeleted(false);
+        userRepository.save(root);
+        log.info("Seeded ROOT user: phone=" + rootPhone + ", username=" + rootUsername);
+    }
+
+    public void seedDispatchCenter() {
+        log.info("*** Seeding default Dispatch Center ***");
+        boolean exists = emergencyUnitRepository.findAll().stream()
+                .anyMatch(u -> u.getUnitType() == UnitType.DISPATCH_CENTER);
+        if (exists) { log.info("Dispatch center already exists. Skipping..."); return; }
+
+        // Attach to first available agency (any agency is fine for a cross-agency coordination unit)
+        agencyRepository.findAll().stream().findFirst().ifPresent(agency -> {
+            EmergencyUnit center = EmergencyUnit.builder()
+                    .name("National Emergency Coordination Center")
+                    .agency(agency)
+                    .unitType(UnitType.DISPATCH_CENTER)
+                    .level(UnitLevel.NATIONAL)
+                    .build();
+            emergencyUnitRepository.save(center);
+            log.info("Seeded National Emergency Coordination Center");
+        });
+    }
+
     @Override
     public void run(ApplicationArguments args) throws Exception {
+        dropStaleRoleConstraint();
+        dropStalePermissionConstraint();
+        dropStaleIncidentStatusConstraint();
+        dropStaleUnitTypeConstraint();
+        migrateOldRoles();
         seedAreaLevel();
         seedAreaType();
         seedAdministrativeArea();
+        seedDefaultAgencies();
+        seedDispatchCenter();
+        seedPermissions();
+        seedRootUser();
     }
 }

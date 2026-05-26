@@ -6,8 +6,11 @@ import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
 import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
 import com.smartincident.incidentbackend.authotp.security.JwtAuthInterceptor;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.authotp.service.UserService;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.permission.service.PermissionService;
 import com.smartincident.incidentbackend.police.dto.OfficerShiftDto;
 import com.smartincident.incidentbackend.police.entity.OfficerShift;
 import com.smartincident.incidentbackend.police.repository.OfficerShiftRepository;
@@ -27,11 +30,13 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class UserController {
+
     private final UserService userService;
     private final JwtAuthInterceptor jwtAuthInterceptor;
     private final PoliceOfficerRepository policeOfficerRepository;
     private final UserRepository userRepository;
     private final OfficerShiftRepository officerShiftRepository;
+    private final PermissionService permissionService;
 
     @PostMapping("/register")
     public Response<User> userRegistration(@RequestBody UserDto userDto) {
@@ -39,7 +44,7 @@ public class UserController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.CREATE_USER)
     @PostMapping("/register-special")
     public Response<User> registerSpecialUser(@RequestBody UserDto userDto) {
         log.info("Attempting to register special user with phone: {}", userDto.getPhoneNumber());
@@ -52,7 +57,7 @@ public class UserController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.DELETE_USER)
     @DeleteMapping("/{uid}")
     public Response<User> deleteUser(@PathVariable String uid) {
         return userService.deleteUser(uid);
@@ -65,11 +70,9 @@ public class UserController {
         try {
             String phoneNumber = jwtAuthInterceptor.getValidatedPhoneNumber();
             String currentToken = jwtAuthInterceptor.extractTokenFromRequest();
-
             if (phoneNumber == null || currentToken == null) {
                 return Response.error("Invalid or missing authentication token");
             }
-
             return userService.deleteOwnAccount(phoneNumber, currentToken);
         } catch (Exception e) {
             log.error("Error in deleteMyAccount: {}", e.getMessage());
@@ -78,7 +81,7 @@ public class UserController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_ANALYTICS)
     @GetMapping
     public ResponsePage<User> getUsers(@ModelAttribute PageableParam pageableParam) {
         return userService.getUsers(pageableParam != null ? pageableParam : new PageableParam());
@@ -86,7 +89,6 @@ public class UserController {
 
     @GetMapping("/me")
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.POLICE_OFFICER, Role.CITIZEN, Role.ROOT})
     public Response<UserDto> getCurrentUser() {
         String phone = jwtAuthInterceptor.extractPhoneFromRequest();
         if (phone == null) {
@@ -104,12 +106,10 @@ public class UserController {
         dto.setName(user.getName());
         dto.setPhoneNumber(user.getPhoneNumber());
         dto.setRole(user.getRole());
-        dto.setStationUid(
-                user.getStation() != null ? user.getStation().getUid() : null
-        );
+        dto.setEmergencyUnitUid(
+                user.getEmergencyUnit() != null ? user.getEmergencyUnit().getUid() : null);
         dto.setStationName(
-                user.getStation() != null ? user.getStation().getName() : null
-        );
+                user.getEmergencyUnit() != null ? user.getEmergencyUnit().getName() : null);
 
         if (user.getRole() == Role.POLICE_OFFICER) {
             policeOfficerRepository.findByUserUidAndIsActiveTrue(dto.getUid()).ifPresent(officer -> {
@@ -119,32 +119,28 @@ public class UserController {
 
                 LocalDate today = LocalDate.now();
                 LocalTime now = LocalTime.now();
-
-                Optional<OfficerShift> currentShiftOpt = officerShiftRepository.findByOfficerUidAndShiftDateAndStartTimeBeforeAndEndTimeAfter(
-                        officer.getUid(), today, now, now
-                );
-
-                if (currentShiftOpt.isPresent()) {
-                    dto.setIsOnDuty(true);
-                    OfficerShift shift = currentShiftOpt.get();
-                    dto.setCurrentShift(new OfficerShiftDto(shift));
-                } else {
-                    dto.setIsOnDuty(false);
-                }
+                Optional<OfficerShift> currentShiftOpt =
+                        officerShiftRepository.findByOfficerUidAndShiftDateAndStartTimeBeforeAndEndTimeAfter(
+                                officer.getUid(), today, now, now);
+                dto.setIsOnDuty(currentShiftOpt.isPresent());
+                currentShiftOpt.ifPresent(shift -> dto.setCurrentShift(new OfficerShiftDto(shift)));
             });
         }
+        dto.setPermissions(permissionService.getPermissionsForRole(user.getRole()));
         return new Response<>(dto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_ANALYTICS)
     @GetMapping("/by-station/{policeStationUid}")
-    public ResponsePage<User> getUsersByStation(@ModelAttribute PageableParam pageableParam, @PathVariable String policeStationUid) {
-        return userService.getUsersByStation(pageableParam != null ? pageableParam : new PageableParam(), policeStationUid);
+    public ResponsePage<User> getUsersByStation(@ModelAttribute PageableParam pageableParam,
+                                                @PathVariable String policeStationUid) {
+        return userService.getUsersByStation(
+                pageableParam != null ? pageableParam : new PageableParam(), policeStationUid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.ROOT})
+    @RequiresPermission(Permission.ASSIGN_ROLE)
     @PatchMapping("/{uid}/role")
     public Response<User> changeUserRole(
             @PathVariable String uid,
@@ -155,26 +151,27 @@ public class UserController {
 
     @GetMapping("/special")
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_ANALYTICS)
     public ResponseList<User> getSpecialUsers(@RequestParam(required = false) Role role) {
-        List<Role> allowedRoles = List.of(Role.POLICE_OFFICER, Role.STATION_ADMIN, Role.ROOT);
+        List<Role> allowedRoles = List.of(Role.POLICE_OFFICER, Role.STATION_ADMIN, Role.ROOT,
+                Role.AGENCY_ADMIN, Role.DISPATCHER);
 
         if (role != null && !allowedRoles.contains(role)) {
             return ResponseList.error("Invalid role for special users");
         }
 
-        String stationUid = LoggedUser.getStationUid();
-        boolean isRoot = LoggedUser.isRoot();
+        String stationUid = LoggedUser.getAnyStationUid();
+        boolean isPrivileged = LoggedUser.isRoot() || LoggedUser.isAgencyAdmin();
 
         List<User> users;
         if (role != null) {
-            users = isRoot
+            users = isPrivileged
                     ? userRepository.findByRoleAndIsActiveTrue(role)
-                    : userRepository.findByRoleAndStationUidAndIsActiveTrue(role, stationUid);
+                    : userRepository.findByRoleAndEmergencyUnitUidAndIsActiveTrue(role, stationUid);
         } else {
-            users = isRoot
+            users = isPrivileged
                     ? userRepository.findByRoleInAndIsActiveTrue(allowedRoles)
-                    : userRepository.findByRoleInAndStationUidAndIsActiveTrue(allowedRoles, stationUid);
+                    : userRepository.findByRoleInAndEmergencyUnitUidAndIsActiveTrue(allowedRoles, stationUid);
         }
 
         return new ResponseList<>(users);

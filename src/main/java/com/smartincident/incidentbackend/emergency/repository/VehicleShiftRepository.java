@@ -16,7 +16,7 @@ public interface VehicleShiftRepository extends JpaRepository<VehicleShift, Long
 
     @Query("""
         select s from VehicleShift s
-        where s.vehicle.station.uid = :stationUid
+        where s.vehicle.emergencyUnit.uid = :stationUid
           and (:isActive is null or s.isActive = :isActive)
         order by s.shiftDate desc, s.startTime
         """)

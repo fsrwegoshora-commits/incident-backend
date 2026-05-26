@@ -5,6 +5,10 @@ import com.smartincident.incidentbackend.emergency.entity.EmergencyVehicle;
 import com.smartincident.incidentbackend.emergency.entity.VehicleShift;
 import com.smartincident.incidentbackend.emergency.repository.EmergencyVehicleRepository;
 import com.smartincident.incidentbackend.emergency.repository.VehicleShiftRepository;
+import com.smartincident.incidentbackend.medical.entity.Hospital;
+import com.smartincident.incidentbackend.medical.entity.Medic;
+import com.smartincident.incidentbackend.medical.repository.HospitalRepository;
+import com.smartincident.incidentbackend.medical.repository.MedicRepository;
 import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
 import com.smartincident.incidentbackend.police.entity.TrafficCheckpoint;
 import com.smartincident.incidentbackend.police.repository.PoliceOfficerRepository;
@@ -28,6 +32,8 @@ public class VehicleShiftService {
     private final EmergencyVehicleRepository vehicleRepository;
     private final PoliceOfficerRepository officerRepository;
     private final TrafficCheckPointRepository checkpointRepository;
+    private final MedicRepository medicRepository;
+    private final HospitalRepository hospitalRepository;
 
     @Transactional
     public Response<VehicleShift> saveShift(VehicleShiftDto dto) {
@@ -47,14 +53,32 @@ public class VehicleShiftService {
             if (dto.getEndTime() != null) shift.setEndTime(dto.getEndTime());
             if (dto.getDutyDescription() != null) shift.setDutyDescription(dto.getDutyDescription());
 
+            // ── Police / Fire crew ──
             if (dto.getCrewUids() != null) {
-                List<PoliceOfficer> crew = resolveOfficers(dto.getCrewUids());
-                shift.setCrew(crew);
+                shift.setCrew(resolveOfficers(dto.getCrewUids()));
             }
             if (dto.getStandbyLocationUid() != null) {
-                Optional<TrafficCheckpoint> cp = checkpointRepository.findByUid(dto.getStandbyLocationUid());
-                cp.ifPresent(shift::setStandbyLocation);
+                checkpointRepository.findByUid(dto.getStandbyLocationUid())
+                        .ifPresent(shift::setStandbyLocation);
             }
+
+            // ── Ambulance crew ──
+            if (dto.getMedicUids() != null) {
+                shift.setMedics(resolveMedics(dto.getMedicUids()));
+            }
+            if (dto.getInChargeUid() != null) {
+                medicRepository.findByUid(dto.getInChargeUid()).ifPresent(shift::setInCharge);
+            }
+            if (dto.getDriverUid() != null) {
+                medicRepository.findByUid(dto.getDriverUid()).ifPresent(shift::setDriver);
+            }
+            if (dto.getStandbyHospitalUid() != null) {
+                hospitalRepository.findByUid(dto.getStandbyHospitalUid()).ifPresent(shift::setStandbyHospital);
+            }
+            if (dto.getStandbyLocationName() != null) {
+                shift.setStandbyLocationName(dto.getStandbyLocationName());
+            }
+
             shift.update();
 
         } else {
@@ -78,6 +102,26 @@ public class VehicleShiftService {
                 standby = checkpointRepository.findByUid(dto.getStandbyLocationUid()).orElse(null);
             }
 
+            List<Medic> medics = new ArrayList<>();
+            if (dto.getMedicUids() != null && !dto.getMedicUids().isEmpty()) {
+                medics = resolveMedics(dto.getMedicUids());
+            }
+
+            Medic inCharge = null;
+            if (dto.getInChargeUid() != null) {
+                inCharge = medicRepository.findByUid(dto.getInChargeUid()).orElse(null);
+            }
+
+            Medic driver = null;
+            if (dto.getDriverUid() != null) {
+                driver = medicRepository.findByUid(dto.getDriverUid()).orElse(null);
+            }
+
+            Hospital standbyHospital = null;
+            if (dto.getStandbyHospitalUid() != null) {
+                standbyHospital = hospitalRepository.findByUid(dto.getStandbyHospitalUid()).orElse(null);
+            }
+
             shift = VehicleShift.builder()
                     .vehicle(vehicleOpt.get())
                     .shiftDate(dto.getShiftDate())
@@ -87,12 +131,18 @@ public class VehicleShiftService {
                     .dutyDescription(dto.getDutyDescription())
                     .crew(crew)
                     .standbyLocation(standby)
+                    .medics(medics)
+                    .inCharge(inCharge)
+                    .driver(driver)
+                    .standbyHospital(standbyHospital)
+                    .standbyLocationName(dto.getStandbyLocationName())
                     .build();
         }
 
         try {
             VehicleShift saved = shiftRepository.save(shift);
-            log.info("Saved vehicle shift for vehicle: {} on {}", saved.getVehicle().getPlateNumber(), saved.getShiftDate());
+            log.info("Saved vehicle shift for vehicle: {} on {}",
+                    saved.getVehicle().getPlateNumber(), saved.getShiftDate());
             return Response.success(saved);
         } catch (Exception e) {
             log.error("Failed to save vehicle shift: {}", e.getMessage());
@@ -126,5 +176,10 @@ public class VehicleShiftService {
             officerRepository.findByUid(uid).ifPresent(result::add);
         }
         return result;
+    }
+
+    private List<Medic> resolveMedics(List<String> uids) {
+        if (uids == null || uids.isEmpty()) return new ArrayList<>();
+        return medicRepository.findByUidIn(uids);
     }
 }

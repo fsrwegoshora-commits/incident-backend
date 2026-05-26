@@ -20,4 +20,10 @@ public interface TrafficCheckPointRepository extends JpaRepository<TrafficCheckp
             "(lower(tc.name) like %:key% or lower(tc.location.address) like %:key% or lower(tc.parentStation.name) like %:key%) " +
             "and tc.parentStation.uid = :stationUid")
     Page<TrafficCheckpoint> getTrafficCheckpointsByPoliceStation(Pageable pageable, Boolean isActive, String key, String stationUid);
+
+    /** UIDs of officers currently serving as checkpoint supervisors at the given station. */
+    @Query("select tc.supervisingOfficer.uid from TrafficCheckpoint tc " +
+           "where tc.supervisingOfficer is not null and tc.isActive = true " +
+           "and tc.parentStation.uid = :stationUid")
+    java.util.List<String> findSupervisorOfficerUidsByStation(String stationUid);
 }

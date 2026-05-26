@@ -8,6 +8,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -34,6 +36,11 @@ public interface IncidentAgencyRepository extends JpaRepository<IncidentAgency, 
     );
 
     Long countByIncidentAndResponseStatus(IncidentReport incident, AgencyResponseStatus status);
+
+    @Query("SELECT ia FROM IncidentAgency ia WHERE ia.incident.uid = :incidentUid AND ia.agency.uid = :agencyUid")
+    Optional<IncidentAgency> findByIncidentUidAndAgencyUid(
+            @Param("incidentUid") String incidentUid,
+            @Param("agencyUid") String agencyUid);
 
     // Get all pending notifications for an agency
     Page<IncidentAgency> findByAgencyAndResponseStatus(
