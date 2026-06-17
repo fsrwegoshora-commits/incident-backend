@@ -5,6 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -16,4 +18,9 @@ public class DispatchDto {
     // Used only for status update endpoint
     private DispatchStatus status;
     private Integer etaMinutes;
+
+    // Optional crew override — if omitted, crew is resolved from today's active VehicleShift
+    private String driverUid;
+    private String commanderUid;
+    private List<String> crewUids;
 }

@@ -28,6 +28,9 @@ public class UserDto {
     private String password;
     /** UID of the EmergencyUnit to assign this user to (replaces stationUid). */
     private String emergencyUnitUid;
+
+    /** UID of the PoliceStation this user belongs to (set for STATION_ADMIN and POLICE_OFFICER). */
+    private String policeStationUid;
     /** @deprecated use emergencyUnitUid */
     @Deprecated
     private String stationUid;
@@ -53,6 +56,9 @@ public class UserDto {
 
     /** Permissions granted to this user's role — included in /me and auth responses. */
     private Set<Permission> permissions;
+
+    /** ISO 639-1 language preference: "en" or "sw". */
+    private String preferredLanguage;
 
     /** Returns emergencyUnitUid, falling back to stationUid for backward compatibility. */
     public String getEmergencyUnitUid() {

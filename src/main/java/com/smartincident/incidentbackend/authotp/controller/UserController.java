@@ -108,8 +108,13 @@ public class UserController {
         dto.setRole(user.getRole());
         dto.setEmergencyUnitUid(
                 user.getEmergencyUnit() != null ? user.getEmergencyUnit().getUid() : null);
-        dto.setStationName(
-                user.getEmergencyUnit() != null ? user.getEmergencyUnit().getName() : null);
+        if (user.getPoliceStation() != null) {
+            dto.setPoliceStationUid(user.getPoliceStation().getUid());
+            dto.setStationName(user.getPoliceStation().getName());
+        } else {
+            dto.setStationName(
+                    user.getEmergencyUnit() != null ? user.getEmergencyUnit().getName() : null);
+        }
 
         if (user.getRole() == Role.POLICE_OFFICER) {
             policeOfficerRepository.findByUserUidAndIsActiveTrue(dto.getUid()).ifPresent(officer -> {
@@ -127,7 +132,22 @@ public class UserController {
             });
         }
         dto.setPermissions(permissionService.getPermissionsForRole(user.getRole()));
+        dto.setPreferredLanguage(user.getPreferredLanguage() != null ? user.getPreferredLanguage() : "en");
         return new Response<>(dto);
+    }
+
+    /**
+     * Update the authenticated user's preferred language.
+     * Body: { "preferredLanguage": "sw" }
+     */
+    @Authenticated
+    @PutMapping("/me/language")
+    public Response<User> updateLanguage(@RequestBody UserDto dto) {
+        String phone = jwtAuthInterceptor.extractPhoneFromRequest();
+        if (phone == null) return Response.error("Authentication required");
+        if (dto.getPreferredLanguage() == null || dto.getPreferredLanguage().isBlank())
+            return Response.error("preferredLanguage is required (en or sw)");
+        return userService.updatePreferredLanguage(phone, dto.getPreferredLanguage());
     }
 
     @Authenticated

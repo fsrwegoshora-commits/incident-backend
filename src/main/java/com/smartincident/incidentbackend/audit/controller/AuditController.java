@@ -21,7 +21,7 @@ public class AuditController {
 
     /**
      * GET /api/audit/logs
-     * Query params: actorUid, action, entityType, from, to, key, page, size
+     * Query params: actorUid, action, entityType, category, from, to, key, page, size
      */
     @Authenticated
     @RequiresPermission(Permission.VIEW_AUDIT_LOGS)
@@ -30,6 +30,7 @@ public class AuditController {
             @RequestParam(required = false) String actorUid,
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String entityType,
+            @RequestParam(required = false) String category,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
             @RequestParam(required = false) String key,

@@ -21,6 +21,9 @@ import com.smartincident.incidentbackend.setting.repository.AdministrativeAreaRe
 import com.smartincident.incidentbackend.setting.repository.AgencyRepository;
 import com.smartincident.incidentbackend.setting.repository.AreaLevelRepository;
 import com.smartincident.incidentbackend.setting.repository.AreaTypeRepository;
+import com.smartincident.incidentbackend.enums.AgencyType;
+import com.smartincident.incidentbackend.rank.entity.AgencyRank;
+import com.smartincident.incidentbackend.rank.repository.AgencyRankRepository;
 import com.univocity.parsers.common.record.Record;
 import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
@@ -55,6 +58,7 @@ public class Initializer implements ApplicationRunner {
     private final EmergencyUnitRepository emergencyUnitRepository;
     private final JdbcTemplate jdbcTemplate;
     private final BCryptPasswordEncoder passwordEncoder;
+    private final AgencyRankRepository agencyRankRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${app.seed.root.phone:+255000000000}")
@@ -265,29 +269,46 @@ public class Initializer implements ApplicationRunner {
 
         // Default role → permission mappings
         Map<Role, Set<Permission>> defaults = new LinkedHashMap<>();
-        defaults.put(Role.ROOT,         EnumSet.allOf(Permission.class));
+        defaults.put(Role.ROOT, EnumSet.allOf(Permission.class));
         defaults.put(Role.AGENCY_ADMIN, EnumSet.of(
                 Permission.CREATE_USER, Permission.UPDATE_USER, Permission.DELETE_USER,
                 Permission.ASSIGN_ROLE, Permission.MANAGE_AGENCY, Permission.MANAGE_STATIONS,
                 Permission.VIEW_ANALYTICS, Permission.VIEW_AUDIT_LOGS,
                 Permission.DISPATCH_INCIDENT, Permission.UPDATE_INCIDENT, Permission.CLOSE_INCIDENT,
-                Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES));
+                Permission.ESCALATE_INCIDENT, Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES,
+                Permission.VIEW_SLA_METRICS, Permission.MANAGE_AFTER_ACTION,
+                Permission.VIEW_DISPATCH_CENTER, Permission.ASSIGN_DISPATCHER,
+                Permission.MANAGE_SHIFTS));
+        defaults.put(Role.DISPATCH_CENTER_ADMIN, EnumSet.of(
+                Permission.CREATE_USER, Permission.UPDATE_USER,
+                Permission.DISPATCH_INCIDENT, Permission.UPDATE_INCIDENT, Permission.CLOSE_INCIDENT,
+                Permission.ESCALATE_INCIDENT, Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES,
+                Permission.VIEW_ANALYTICS, Permission.VIEW_SLA_METRICS,
+                Permission.MANAGE_AFTER_ACTION, Permission.VIEW_DISPATCH_CENTER,
+                Permission.ASSIGN_DISPATCHER, Permission.MANAGE_SHIFTS));
+        defaults.put(Role.DISPATCHER_SUPERVISOR, EnumSet.of(
+                Permission.DISPATCH_INCIDENT, Permission.UPDATE_INCIDENT, Permission.CLOSE_INCIDENT,
+                Permission.ESCALATE_INCIDENT, Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES,
+                Permission.VIEW_ANALYTICS, Permission.VIEW_SLA_METRICS,
+                Permission.MANAGE_AFTER_ACTION, Permission.VIEW_DISPATCH_CENTER,
+                Permission.MANAGE_SHIFTS));
         defaults.put(Role.STATION_ADMIN, EnumSet.of(
                 Permission.CREATE_USER, Permission.UPDATE_USER,
                 Permission.MANAGE_VEHICLES, Permission.MANAGE_STATIONS, Permission.MANAGE_CHECKPOINTS,
                 Permission.VIEW_ANALYTICS, Permission.DISPATCH_INCIDENT,
                 Permission.UPDATE_INCIDENT, Permission.CLOSE_INCIDENT,
-                Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES));
+                Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES, Permission.MANAGE_SHIFTS));
         defaults.put(Role.DISPATCHER, EnumSet.of(
                 Permission.DISPATCH_INCIDENT, Permission.UPDATE_INCIDENT,
-                Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES));
+                Permission.ESCALATE_INCIDENT, Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES,
+                Permission.VIEW_SLA_METRICS, Permission.MANAGE_AFTER_ACTION));
         defaults.put(Role.POLICE_OFFICER, EnumSet.of(
                 Permission.CREATE_INCIDENT, Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE,
-                Permission.VIEW_VEHICLES));
+                Permission.VIEW_VEHICLES, Permission.UPDATE_OWN_PROFILE));
         defaults.put(Role.FIRE_OFFICER, EnumSet.of(
-                Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE));
+                Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE, Permission.UPDATE_OWN_PROFILE));
         defaults.put(Role.MEDIC, EnumSet.of(
-                Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE));
+                Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE, Permission.UPDATE_OWN_PROFILE));
         defaults.put(Role.CITIZEN, EnumSet.of(
                 Permission.CREATE_INCIDENT, Permission.UPLOAD_EVIDENCE,
                 Permission.VIEW_OWN_INCIDENTS, Permission.UPDATE_OWN_PROFILE));
@@ -384,6 +405,67 @@ public class Initializer implements ApplicationRunner {
         });
     }
 
+    @Transactional
+    public void seedAgencyRanks() {
+        if (agencyRankRepository.existsByAgencyType(AgencyType.POLICE)) {
+            log.info("Agency ranks already seeded. Skipping...");
+            return;
+        }
+        log.info("*** Seeding Agency Ranks ***");
+
+        // ── Police Ranks (14 official Tanzania Police Force ranks) ───────────
+        Object[][] policeRanks = {
+            {"IGP",    "Inspector General of Police",             "Inspekta Jenerali wa Polisi",            "IGP",    1,  "Head of the Police Force appointed by the President"},
+            {"CP",     "Commissioner of Police",                  "Kamishna wa Polisi",                     "CP",     2,  "Responsible for major police departments and commands"},
+            {"DCP",    "Deputy Commissioner of Police",           "Naibu Kamishna wa Polisi",               "DCP",    3,  "Deputy to the Commissioner of Police"},
+            {"SACP",   "Senior Assistant Commissioner of Police", "Kamishna Msaidizi Mwandamizi wa Polisi", "SACP",   4,  "Responsible for large regional commands"},
+            {"ACP",    "Assistant Commissioner of Police",        "Kamishna Msaidizi wa Polisi",            "ACP",    5,  "Responsible for divisions, districts or departments"},
+            {"SSP",    "Senior Superintendent of Police",         "Mrakibu Mwandamizi wa Polisi",           "SSP",    6,  "Responsible for specialized units and major operations"},
+            {"SP",     "Superintendent of Police",                "Mrakibu wa Polisi",                      "SP",     7,  "Responsible for station or departmental management"},
+            {"ASP",    "Assistant Superintendent of Police",      "Mrakibu Msaidizi wa Polisi",             "ASP",    8,  "Assistant to Superintendent and station-level leadership"},
+            {"INSP",   "Inspector",                               "Inspekta wa Polisi",                     "INSP",   9,  "Supervises operational units and field teams"},
+            {"AINSP",  "Assistant Inspector",                     "Inspekta Msaidizi wa Polisi",            "A/INSP", 10, "Assists Inspectors in operational supervision"},
+            {"RSM",    "Regimental Sergeant Major",               "Meja Sajenti wa Polisi",                 "RSM",    11, "Senior non-commissioned operational leader"},
+            {"SGT",    "Sergeant",                                "Sajenti wa Polisi",                      "SGT",    12, "Supervises small operational teams"},
+            {"CPL",    "Corporal",                                "Koplo wa Polisi",                        "CPL",    13, "Leads small officer groups and patrol elements"},
+            {"PC",     "Police Constable",                        "Konstebo wa Polisi",                     "PC",     14, "Entry-level police officer responsible for frontline duties"},
+        };
+
+        // ── Fire Ranks (10 official Tanzania Fire and Rescue Force ranks) ────
+        Object[][] fireRanks = {
+            {"CFO",        "Chief Fire Officer",           "Mkuu wa Zima Moto",                  "CFO",     1,  "Head of the Fire and Rescue Force"},
+            {"DCFO",       "Deputy Chief Fire Officer",    "Naibu Mkuu wa Zima Moto",            "DCFO",    2,  "Deputy to the Chief Fire Officer"},
+            {"SDO",        "Senior Divisional Officer",    "Afisa Mkuu wa Kitengo",              "SDO",     3,  "Responsible for major fire divisions"},
+            {"DO",         "Divisional Officer",           "Afisa wa Kitengo",                   "DO",      4,  "Responsible for fire division management"},
+            {"ADO",        "Assistant Divisional Officer", "Afisa Msaidizi wa Kitengo",          "ADO",     5,  "Assists Divisional Officer in operations"},
+            {"SO",         "Station Officer",              "Afisa wa Kituo",                     "SO",      6,  "Responsible for fire station management"},
+            {"ASO",        "Assistant Station Officer",    "Afisa Msaidizi wa Kituo",            "ASO",     7,  "Assists Station Officer in daily operations"},
+            {"SUB_OFFICER","Sub-Officer",                  "Naibu Afisa",                        "SUB",     8,  "Senior non-commissioned fire officer"},
+            {"LEADING_FM", "Leading Fireman",              "Kiongozi wa Zimamoto",               "L/FM",    9,  "Leads small fire response teams"},
+            {"FIREMAN",    "Fireman",                      "Zimamoto",                           "FM",      10, "Entry-level fire and rescue officer"},
+        };
+
+        List<AgencyRank> ranks = new ArrayList<>();
+        for (Object[] r : policeRanks) {
+            ranks.add(AgencyRank.builder()
+                    .code((String) r[0]).agencyType(AgencyType.POLICE)
+                    .nameEnglish((String) r[1]).nameSwahili((String) r[2])
+                    .abbreviation((String) r[3]).rankOrder((Integer) r[4])
+                    .description((String) r[5]).isSystemDefined(true)
+                    .build());
+        }
+        for (Object[] r : fireRanks) {
+            ranks.add(AgencyRank.builder()
+                    .code((String) r[0]).agencyType(AgencyType.FIRE)
+                    .nameEnglish((String) r[1]).nameSwahili((String) r[2])
+                    .abbreviation((String) r[3]).rankOrder((Integer) r[4])
+                    .description((String) r[5]).isSystemDefined(true)
+                    .build());
+        }
+        agencyRankRepository.saveAll(ranks);
+        log.info("Seeded " + ranks.size() + " agency ranks (14 police + 10 fire)");
+    }
+
     @Override
     public void run(ApplicationArguments args) throws Exception {
         dropStaleRoleConstraint();
@@ -398,5 +480,6 @@ public class Initializer implements ApplicationRunner {
         seedDispatchCenter();
         seedPermissions();
         seedRootUser();
+        seedAgencyRanks();
     }
 }

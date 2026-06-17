@@ -22,7 +22,7 @@ public class AppointmentController {
     private final AppointmentService appointmentService;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
     @PostMapping
     public Response<StationAppointment> saveAppointment(@RequestBody AppointmentDto dto) {
         return appointmentService.saveAppointment(dto);
@@ -54,7 +54,7 @@ public class AppointmentController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
     @PatchMapping("/{uid}/status")
     public Response<StationAppointment> updateStatus(
             @PathVariable String uid,
@@ -63,7 +63,7 @@ public class AppointmentController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
     @DeleteMapping("/{uid}")
     public Response<StationAppointment> deleteAppointment(@PathVariable String uid) {
         return appointmentService.deleteAppointment(uid);

@@ -56,5 +56,13 @@ public class VehicleLocationController {
                 @RequestParam(defaultValue = "60") int lastMinutes) {
             return new ResponseList<>(locationService.getTrail(vehicleUid, lastMinutes));
         }
+
+        /** Returns all vehicles that have a known GPS position (for the live map). */
+        @Authenticated
+        @RequiresPermission(Permission.VIEW_VEHICLES)
+        @GetMapping("/all-active")
+        public ResponseList<?> getAllActiveLocations() {
+            return locationService.getAllActiveVehiclePositions();
+        }
     }
 }

@@ -4,7 +4,9 @@ import com.smartincident.incidentbackend.authotp.security.Authenticated;
 import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
 import com.smartincident.incidentbackend.enums.AppointmentPosition;
 import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.police.dto.OfficerProfileUpdateDto;
 import com.smartincident.incidentbackend.police.dto.PoliceOfficerDto;
+import com.smartincident.incidentbackend.police.dto.PoliceOfficerResponse;
 import com.smartincident.incidentbackend.police.entity.OfficerShift;
 import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
 import com.smartincident.incidentbackend.police.repository.OfficerShiftRepository;
@@ -16,6 +18,8 @@ import com.smartincident.incidentbackend.utils.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -35,37 +39,58 @@ public class PoliceOfficerController {
     private final TrafficCheckPointRepository checkpointRepository;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
     @PostMapping
     public Response<PoliceOfficer> savePoliceOfficer(@RequestBody PoliceOfficerDto policeOfficerDto) {
         return policeOfficerService.savePoliceOfficer(policeOfficerDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
     @GetMapping("/{uid}")
     public Response<PoliceOfficer> getPoliceOfficer(@PathVariable String uid) {
         return policeOfficerService.getPoliceOfficer(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
     @DeleteMapping("/{uid}")
     public Response<PoliceOfficer> deletePoliceOfficer(@PathVariable String uid) {
         return policeOfficerService.deletePoliceOfficer(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @PatchMapping("/{uid}/profile")
+    public Response<PoliceOfficerResponse> updateOfficerProfile(
+            @PathVariable String uid,
+            @RequestBody OfficerProfileUpdateDto dto) {
+        return policeOfficerService.updateOfficerProfile(uid, dto);
+    }
+
+    @Authenticated
+    @AuthorizedRole({Role.AGENCY_ADMIN, Role.ROOT})
+    @PatchMapping("/{uid}/transfer")
+    public Response<PoliceOfficerResponse> transferOfficer(
+            @PathVariable String uid,
+            @RequestBody Map<String, String> body) {
+        String newStationUid = body.get("stationUid");
+        if (newStationUid == null || newStationUid.isBlank())
+            return Response.error("stationUid is required");
+        return policeOfficerService.transferOfficer(uid, newStationUid);
+    }
+
+    @Authenticated
+    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
     @GetMapping
-    public ResponsePage<PoliceOfficer> getPoliceOfficers(@ModelAttribute PageableParam pageableParam) {
+    public ResponsePage<PoliceOfficerResponse> getPoliceOfficers(@ModelAttribute PageableParam pageableParam) {
         return policeOfficerService.getPoliceOfficers(pageableParam != null ? pageableParam : new PageableParam());
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
     @GetMapping("/by-station/{policeStationUid}")
-    public ResponsePage<PoliceOfficer> getPoliceOfficersByStation(
+    public ResponsePage<PoliceOfficerResponse> getPoliceOfficersByStation(
             @ModelAttribute PageableParam pageableParam,
             @PathVariable String policeStationUid) {
         return policeOfficerService.getPoliceOfficersByStation(pageableParam != null ? pageableParam : new PageableParam(), policeStationUid);

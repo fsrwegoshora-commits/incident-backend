@@ -63,9 +63,10 @@ public class SecurityConfig {
                     "/api/areas/**",
                     "/ws-notifications/**",
                     "/uploads/**",
-                    "/error",
-                    "/api/debug/**"
+                    "/error"
                 ).permitAll()
+                // Debug endpoints require ROOT role — never publicly accessible
+                .requestMatchers("/api/debug/**").hasAuthority("ROOT")
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex

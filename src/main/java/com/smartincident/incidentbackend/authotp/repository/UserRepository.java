@@ -19,6 +19,19 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByPhoneNumber(String phoneNumber);
 
+    /**
+     * Fetches the user with agency/emergencyUnit/policeStation eagerly initialized.
+     * Used to cache the authenticated User for the duration of a request (see JwtAuthFilter /
+     * LoggedUser) — those lazy associations would otherwise throw LazyInitializationException
+     * once the short-lived session this query runs in is closed.
+     */
+    @Query("SELECT u FROM User u " +
+           "LEFT JOIN FETCH u.agency " +
+           "LEFT JOIN FETCH u.emergencyUnit " +
+           "LEFT JOIN FETCH u.policeStation " +
+           "WHERE u.phoneNumber = :phoneNumber")
+    Optional<User> findByPhoneNumberWithAssociations(@Param("phoneNumber") String phoneNumber);
+
     @Query(value = """
         select distinct u from User u
         left join fetch u.emergencyUnit eu
@@ -108,6 +121,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     int migrateRole(@Param("oldRole") Role oldRole, @Param("newRole") Role newRole);
 
     List<User> findByAgencyUidAndIsActiveTrue(String agencyUid);
+
+    List<User> findByAgencyUidAndRoleAndIsActiveTrue(String agencyUid, Role role);
 
     @Query(value = """
         select distinct u from User u

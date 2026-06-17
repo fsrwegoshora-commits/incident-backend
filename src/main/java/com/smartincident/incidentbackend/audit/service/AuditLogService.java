@@ -24,6 +24,16 @@ public class AuditLogService {
                     String action, String entityType, String entityUid,
                     String endpoint, String httpMethod, String description,
                     String ipAddress, boolean success) {
+        log(actorUid, actorName, actorRole, action, entityType, entityUid,
+                endpoint, httpMethod, description, ipAddress, success, null, null, null);
+    }
+
+    @Async
+    public void log(String actorUid, String actorName, String actorRole,
+                    String action, String entityType, String entityUid,
+                    String endpoint, String httpMethod, String description,
+                    String ipAddress, boolean success,
+                    String oldValue, String newValue, String category) {
         try {
             AuditLog entry = AuditLog.builder()
                     .actorUid(actorUid)
@@ -37,6 +47,9 @@ public class AuditLogService {
                     .description(description)
                     .ipAddress(ipAddress)
                     .success(success)
+                    .oldValue(oldValue)
+                    .newValue(newValue)
+                    .category(category)
                     .timestamp(LocalDateTime.now())
                     .build();
             repository.save(entry);
@@ -49,8 +62,15 @@ public class AuditLogService {
             String actorUid, String action, String entityType,
             LocalDateTime from, LocalDateTime to, String key,
             int page, int size) {
+        return getLogs(actorUid, action, entityType, null, from, to, key, page, size);
+    }
+
+    public ResponsePage<AuditLog> getLogs(
+            String actorUid, String action, String entityType, String category,
+            LocalDateTime from, LocalDateTime to, String key,
+            int page, int size) {
         Page<AuditLog> result = repository.findFiltered(
-                actorUid, action, entityType, from, to,
+                actorUid, action, entityType, category, from, to,
                 (key == null || key.isBlank()) ? null : key,
                 PageRequest.of(page, size));
         return new ResponsePage<>(result);

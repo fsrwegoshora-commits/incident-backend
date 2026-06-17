@@ -53,14 +53,14 @@ public class NotificationController {
     }
 
     @Authenticated
-    @DeleteMapping("/clear/{userUid}")
-    public ResponseList<Notification> clearNotifications(@PathVariable String userUid) {
-        return notificationService.clearNotifications(userUid);
+    @DeleteMapping("/clear")
+    public ResponseList<Notification> clearNotifications() {
+        return notificationService.clearNotifications();
     }
 
     @Authenticated
-    @PutMapping("/mark-all-read/{userUid}")
-    public ResponseList<Notification> markAllRead(@PathVariable String userUid) {
-        return notificationService.markAllRead(userUid);
+    @PutMapping("/mark-all-read")
+    public ResponseList<Notification> markAllRead() {
+        return notificationService.markAllRead();
     }
 }

@@ -5,12 +5,19 @@ import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.dispatcher.repository.DispatcherShiftRepository;
 import com.smartincident.incidentbackend.emergency.entity.EmergencyUnit;
 import com.smartincident.incidentbackend.emergency.repository.EmergencyUnitRepository;
+import com.smartincident.incidentbackend.classification.service.AiTriageService;
 import com.smartincident.incidentbackend.enums.*;
+import com.smartincident.incidentbackend.incident.dto.CommandStructureDto;
+import com.smartincident.incidentbackend.incident.dto.CorrelationResult;
+import com.smartincident.incidentbackend.incident.dto.DesignateCommanderRequest;
 import com.smartincident.incidentbackend.incident.dto.IncidentReportDto;
+import com.smartincident.incidentbackend.incident.dto.IncidentTimelineDto;
 import com.smartincident.incidentbackend.incident.entity.IncidentAgency;
 import com.smartincident.incidentbackend.incident.entity.IncidentReport;
+import com.smartincident.incidentbackend.incident.entity.IncidentStatusHistory;
 import com.smartincident.incidentbackend.incident.repository.IncidentAgencyRepository;
 import com.smartincident.incidentbackend.incident.repository.IncidentReportRepository;
+import com.smartincident.incidentbackend.incident.repository.IncidentStatusHistoryRepository;
 import com.smartincident.incidentbackend.notification.dto.NotificationDto;
 import com.smartincident.incidentbackend.notification.service.NotificationService;
 import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
@@ -47,6 +54,9 @@ public class IncidentReportService {
     private final IncidentAgencyRepository incidentAgencyRepository;
     private final NotificationService notificationService;
     private final DispatcherShiftRepository dispatcherShiftRepository;
+    private final IncidentStatusHistoryRepository statusHistoryRepository;
+    private final IncidentCorrelationService correlationService;
+    private final AiTriageService aiTriageService;
 
     // ── Create ─────────────────────────────────────────────────────────────
 
@@ -100,69 +110,62 @@ public class IncidentReportService {
         incident.setRequiresMedicalService(needsMedical);
         incident.setIsMajorIncident(Boolean.TRUE.equals(dto.getIsMajorIncident()));
         incident.setEocActivated(Boolean.TRUE.equals(dto.getEocActivated()));
-        incident.setEmergencyLevel(dto.getEmergencyLevel() != null ? dto.getEmergencyLevel() : EmergencyLevel.MEDIUM);
+        EmergencyLevel level = dto.getEmergencyLevel() != null ? dto.getEmergencyLevel() : EmergencyLevel.MEDIUM;
+        incident.setEmergencyLevel(level);
         incident.setReportedAt(LocalDateTime.now());
+        incident.setSlaDeadline(LocalDateTime.now().plusMinutes(slaMinutesForLevel(level)));
 
-        // ── Police assignment ──────────────────────────────────────────────
-        if (needsPolice) {
-            PoliceStation station = null;
-            if (dto.getAssignedPoliceStationUid() != null) {
-                station = policeStationRepository.findByUid(dto.getAssignedPoliceStationUid())
-                        .orElse(null);
-            }
-            if (station == null) {
-                station = findNearestPoliceStation(dto.getLatitude(), dto.getLongitude());
-            }
-            if (station == null)
-                return Response.error("No police station found near your location");
-            incident.setAssignedPoliceStation(station);
-            log.info("Assigned police station: {}", station.getName());
+        // ── AI Triage — classify EMERGENCY vs NON_EMERGENCY ───────────────
+        try {
+            AiTriageService.TriageResult triage = aiTriageService.triage(dto.getTitle(), dto.getDescription());
+            incident.setNature(triage.nature());
+            incident.setDetectedLanguage(triage.language());
+            incident.setTriageReasoning(triage.reasoning());
+            log.info("Triage: nature={} lang={} confidence={} — {}",
+                    triage.nature(), triage.language(), triage.confidence(), triage.reasoning());
+        } catch (Exception e) {
+            log.warn("Triage failed, defaulting to EMERGENCY: {}", e.getMessage());
+            incident.setNature(IncidentNature.EMERGENCY);
         }
 
-        // ── Fire / Medical assignment ──────────────────────────────────────
-        if (needsFire || needsMedical) {
-            EmergencyUnit unit = null;
-            if (dto.getAssignedUnitUid() != null) {
-                unit = emergencyUnitRepository.findByUid(dto.getAssignedUnitUid()).orElse(null);
-            }
-            if (unit == null) {
-                UnitType preferredType = needsMedical
-                        ? UnitType.HOSPITAL_AMBULANCE_UNIT
-                        : UnitType.FIRE_BRIGADE;
-                unit = findNearestEmergencyUnit(dto.getLatitude(), dto.getLongitude(), preferredType);
-            }
-            if (unit == null) {
-                String svcName = needsMedical ? "medical (ambulance)" : "fire";
-                return Response.error("No " + svcName + " unit found near your location");
-            }
-            incident.setAssignedUnit(unit);
-            log.info("Assigned emergency unit: {}", unit.getName());
+        // ── Duplicate / Correlation Detection ─────────────────────────────
+        CorrelationResult correlation = correlationService.detect(dto);
+
+        if (correlation.isDuplicate()) {
+            log.info("Duplicate incident suppressed: reporter={} master={}",
+                     reporter.getUid(), correlation.getMasterIncident().getUid());
+            return correlationService.linkDuplicate(correlation, reporter, dto);
         }
 
         // Lead agency = first in priority order: Medical > Police > Fire
         resolveLeadAgency(incident, needsPolice, needsFire, needsMedical);
 
-        // ── Auto-assign to Dispatcher on duty ──────────────────────────────
-        assignOnDutyDispatcher(incident);
-
-        // Optional explicit officer assignment (police incidents only)
-        if (dto.getAssignedOfficerUid() != null && needsPolice) {
-            Optional<PoliceOfficer> officerOpt = officerRepository.findByUid(dto.getAssignedOfficerUid());
-            if (officerOpt.isEmpty())
-                return Response.error("Assigned officer not found");
-            PoliceOfficer officer = officerOpt.get();
-            if (incident.getAssignedPoliceStation() != null &&
-                !officer.getPoliceStation().getUid().equals(incident.getAssignedPoliceStation().getUid()))
-                return Response.error("Officer does not belong to the assigned police station");
-            incident.setAssignedOfficer(officer);
+        // ── Auto-assign to Dispatcher — only for EMERGENCY incidents ───────
+        if (incident.getNature() == IncidentNature.EMERGENCY) {
+            assignOnDutyDispatcher(incident);
         }
 
         try {
             IncidentReport saved = incidentRepository.save(incident);
-            log.info("Incident created: {}", saved.getUid());
+            log.info("Incident created: {} nature={}", saved.getUid(), saved.getNature());
 
-            // Create IncidentAgency records + notify each involved agency
-            createAgencyRecordsAndNotify(saved, needsPolice, needsFire, needsMedical);
+            if (saved.getNature() == IncidentNature.EMERGENCY) {
+                // EMERGENCY → notify dispatchers + agencies
+                createAgencyRecordsAndNotify(saved, needsPolice, needsFire, needsMedical);
+            } else {
+                // NON_EMERGENCY → skip dispatcher queue; notify assigned police station directly
+                resolveNearestPoliceStation(saved);
+                if (saved.getAssignedPoliceStation() != null) {
+                    notifyPoliceStation(saved);
+                }
+            }
+
+            // If a RELATED incident was detected, record the cross-link
+            if (correlation.isRelated()) {
+                correlationService.recordRelated(saved, correlation);
+                log.info("Related incident link recorded: new={} related={}",
+                         saved.getUid(), correlation.getMasterIncident().getUid());
+            }
 
             return new Response<>(saved);
         } catch (Exception e) {
@@ -233,17 +236,29 @@ public class IncidentReportService {
         IncidentReport incident = incidentOpt.get();
         PoliceOfficer officer = officerOpt.get();
 
+        if (incident.getAssignedPoliceStation() != null
+                && !officer.getPoliceStation().getUid().equals(incident.getAssignedPoliceStation().getUid()))
+            return Response.error("Officer does not belong to the assigned police station");
+
         incident.setAssignedOfficer(officer);
-        incident.setStatus(IncidentStatus.DISPATCHED);
         incident.update();
 
         try {
             incident = incidentRepository.save(incident);
-            log.info("Officer assigned successfully");
+            log.info("Officer assigned: {} → incident {}", officer.getBadgeNumber(), incidentUid);
             notifyOfficerAssignment(incident, officer);
-            return new Response<>(incident + "Officer assigned successfully");
+
+            // Advance to DISPATCHED through the state machine if allowed from current status
+            if (TRANSITIONS.getOrDefault(incident.getStatus(), java.util.EnumSet.noneOf(IncidentStatus.class))
+                    .contains(IncidentStatus.DISPATCHED)) {
+                transitionStatus(incidentUid, IncidentStatus.DISPATCHED, "Officer assigned");
+                return incidentRepository.findByUid(incidentUid).map(Response::success)
+                        .orElseGet(() -> Response.error("Incident not found after dispatch"));
+            }
+
+            return Response.success(incident);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("Failed to assign officer: {}", e.getMessage());
             return Response.error("Failed to assign officer: " + Utils.getExceptionMessage(e));
         }
     }
@@ -263,6 +278,18 @@ public class IncidentReportService {
         Page<IncidentReport> incidents = incidentRepository.findByReporter(
                 userUid, pageableParam.getIsActive(), pageableParam.key(), pageableParam.getPageable(true));
         return new ResponsePage<>(incidents);
+    }
+
+    /**
+     * Investigation queue — NON_EMERGENCY incidents assigned to the logged-in station.
+     * Bypasses the dispatcher and is managed directly by the station admin.
+     */
+    public ResponsePage<IncidentReport> getInvestigationQueue(PageableParam pageableParam, IncidentStatus status) {
+        String stationUid = LoggedUser.getPoliceStationUid();
+        if (stationUid == null) return new ResponsePage<>("Police station not found for user");
+        return new ResponsePage<>(incidentRepository.findInvestigationQueue(
+                stationUid, IncidentNature.NON_EMERGENCY, status,
+                pageableParam.getIsActive(), pageableParam.key(), pageableParam.getPageable(true)));
     }
 
     /**
@@ -293,25 +320,10 @@ public class IncidentReportService {
     public ResponsePage<IncidentReport> getPendingStationIncidents(PageableParam pageableParam) {
         String stationUid = LoggedUser.getPoliceStationUid();
         if (stationUid == null) {
-            Page<IncidentReport> all = incidentRepository.findAll(pageableParam.getPageable(true));
-            Page<IncidentReport> pending = new org.springframework.data.domain.PageImpl<>(
-                all.stream().filter(i -> isNewOrPending(i.getStatus()) && i.getIsActive()).toList(),
-                pageableParam.getPageable(true), all.getTotalElements());
-            return new ResponsePage<>(pending);
+            return new ResponsePage<>(incidentRepository.findAllPendingIncidents(pageableParam.getPageable(true)));
         }
-        // Fetch all for station (null status = all) and filter for new/pending lifecycle states
-        Page<IncidentReport> all = incidentRepository.findByPoliceStation(
-                stationUid, null, true, pageableParam.key(), pageableParam.getPageable(true));
-        Page<IncidentReport> pending = new org.springframework.data.domain.PageImpl<>(
-            all.stream().filter(i -> isNewOrPending(i.getStatus())).toList(),
-            pageableParam.getPageable(true), all.getTotalElements());
-        return new ResponsePage<>(pending);
-    }
-
-    private boolean isNewOrPending(IncidentStatus status) {
-        return status == IncidentStatus.REPORTED || status == IncidentStatus.PENDING
-                || status == IncidentStatus.UNDER_REVIEW || status == IncidentStatus.CLASSIFIED
-                || status == IncidentStatus.WAITING_FOR_DISPATCH;
+        return new ResponsePage<>(incidentRepository.findPendingByPoliceStation(
+                stationUid, pageableParam.getPageable(true)));
     }
 
     public ResponsePage<IncidentReport> getOfficerIncidents(PageableParam pageableParam, IncidentStatus status) {
@@ -371,12 +383,8 @@ public class IncidentReportService {
 
         // ROOT sees all incidents regardless of dispatcher assignment
         if (role == Role.ROOT) {
-            Page<IncidentReport> all = incidentRepository.findAll(pageableParam.getPageable(true));
-            List<IncidentReport> filtered = all.stream()
-                    .filter(i -> i.getIsActive() && (status == null || i.getStatus() == status))
-                    .toList();
-            return new ResponsePage<>(new org.springframework.data.domain.PageImpl<>(
-                    filtered, pageableParam.getPageable(true), filtered.size()));
+            return new ResponsePage<>(incidentRepository.findAllActiveIncidents(
+                    status, pageableParam.getPageable(true)));
         }
 
         // DISPATCHER sees only their own assigned incidents
@@ -386,12 +394,19 @@ public class IncidentReportService {
 
     /** All pre-dispatch incidents across every dispatcher queue — for ROOT/AGENCY_ADMIN oversight. */
     public ResponsePage<IncidentReport> getAllPendingIncidents(PageableParam pageableParam) {
-        Page<IncidentReport> page = incidentRepository.findAll(pageableParam.getPageable(true));
-        List<IncidentReport> pending = page.stream()
-                .filter(i -> isNewOrPending(i.getStatus()) && i.getIsActive())
-                .toList();
-        return new ResponsePage<>(new org.springframework.data.domain.PageImpl<>(
-                pending, pageableParam.getPageable(true), pending.size()));
+        return new ResponsePage<>(incidentRepository.findAllPendingIncidents(pageableParam.getPageable(true)));
+    }
+
+    // ── SLA queries ────────────────────────────────────────────────────────
+
+    public ResponsePage<IncidentReport> getSlaBreachedIncidents(PageableParam pageableParam) {
+        return new ResponsePage<>(incidentRepository.findSlaBreached(pageableParam.getPageable(true)));
+    }
+
+    public ResponsePage<IncidentReport> getSlaApproachingIncidents(PageableParam pageableParam, int withinMinutes) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime threshold = now.plusMinutes(withinMinutes);
+        return new ResponsePage<>(incidentRepository.findSlaApproaching(now, threshold, pageableParam.getPageable(true)));
     }
 
     // ── Statistics ─────────────────────────────────────────────────────────
@@ -433,10 +448,14 @@ public class IncidentReportService {
     // ── Status transition state machine ───────────────────────────────────────
 
     private static final java.util.EnumMap<IncidentStatus, java.util.EnumSet<IncidentStatus>> TRANSITIONS;
+
+    /** Roles permitted to trigger each target status. */
+    private static final java.util.EnumMap<IncidentStatus, java.util.EnumSet<Role>> TRANSITION_ROLES;
+
     static {
         TRANSITIONS = new java.util.EnumMap<>(IncidentStatus.class);
         TRANSITIONS.put(IncidentStatus.PENDING,               java.util.EnumSet.of(IncidentStatus.UNDER_REVIEW, IncidentStatus.REPORTED, IncidentStatus.REJECTED));
-        TRANSITIONS.put(IncidentStatus.REPORTED,              java.util.EnumSet.of(IncidentStatus.UNDER_REVIEW, IncidentStatus.REJECTED));
+        TRANSITIONS.put(IncidentStatus.REPORTED,              java.util.EnumSet.of(IncidentStatus.UNDER_REVIEW, IncidentStatus.CLASSIFIED, IncidentStatus.REJECTED));
         TRANSITIONS.put(IncidentStatus.UNDER_REVIEW,          java.util.EnumSet.of(IncidentStatus.CLASSIFIED, IncidentStatus.REPORTED, IncidentStatus.REJECTED));
         TRANSITIONS.put(IncidentStatus.CLASSIFIED,            java.util.EnumSet.of(IncidentStatus.WAITING_FOR_DISPATCH, IncidentStatus.UNDER_REVIEW));
         TRANSITIONS.put(IncidentStatus.WAITING_FOR_DISPATCH,  java.util.EnumSet.of(IncidentStatus.DISPATCHED, IncidentStatus.CLASSIFIED));
@@ -446,38 +465,99 @@ public class IncidentReportService {
         TRANSITIONS.put(IncidentStatus.AT_SCENE,              java.util.EnumSet.of(IncidentStatus.IN_PROGRESS));
         TRANSITIONS.put(IncidentStatus.IN_PROGRESS,           java.util.EnumSet.of(IncidentStatus.RESOLVED));
         TRANSITIONS.put(IncidentStatus.RESOLVED,              java.util.EnumSet.of(IncidentStatus.CLOSED));
+
+        // Roles that may drive each target status
+        TRANSITION_ROLES = new java.util.EnumMap<>(IncidentStatus.class);
+        java.util.EnumSet<Role> dispatchRoles = java.util.EnumSet.of(
+                Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.ROOT);
+        java.util.EnumSet<Role> fieldRoles = java.util.EnumSet.of(
+                Role.POLICE_OFFICER, Role.FIRE_OFFICER, Role.MEDIC,
+                Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.ROOT);
+        java.util.EnumSet<Role> allStaffRoles = java.util.EnumSet.of(
+                Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
+                Role.POLICE_OFFICER, Role.FIRE_OFFICER, Role.MEDIC,
+                Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT);
+
+        TRANSITION_ROLES.put(IncidentStatus.REPORTED,              allStaffRoles);
+        TRANSITION_ROLES.put(IncidentStatus.UNDER_REVIEW,          dispatchRoles);
+        TRANSITION_ROLES.put(IncidentStatus.CLASSIFIED,            dispatchRoles);
+        TRANSITION_ROLES.put(IncidentStatus.WAITING_FOR_DISPATCH,  dispatchRoles);
+        TRANSITION_ROLES.put(IncidentStatus.DISPATCHED,            dispatchRoles);
+        TRANSITION_ROLES.put(IncidentStatus.REJECTED,              dispatchRoles);
+        TRANSITION_ROLES.put(IncidentStatus.ACKNOWLEDGED,          fieldRoles);
+        TRANSITION_ROLES.put(IncidentStatus.EN_ROUTE,              fieldRoles);
+        TRANSITION_ROLES.put(IncidentStatus.AT_SCENE,              fieldRoles);
+        TRANSITION_ROLES.put(IncidentStatus.IN_PROGRESS,           fieldRoles);
+        TRANSITION_ROLES.put(IncidentStatus.RESOLVED,              fieldRoles);
+        TRANSITION_ROLES.put(IncidentStatus.CLOSED,                dispatchRoles);
     }
 
     @Transactional
     public Response<IncidentReport> transitionStatus(String incidentUid, IncidentStatus newStatus) {
+        return transitionStatus(incidentUid, newStatus, null);
+    }
+
+    @Transactional
+    public Response<IncidentReport> transitionStatus(String incidentUid, IncidentStatus newStatus, String note) {
         if (incidentUid == null) return Response.error("Incident UID is required");
-        if (newStatus == null) return Response.error("Target status is required");
+        if (newStatus == null)   return Response.error("Target status is required");
 
         Optional<IncidentReport> opt = incidentRepository.findByUid(incidentUid);
         if (opt.isEmpty()) return Response.error("Incident not found");
         IncidentReport incident = opt.get();
 
         IncidentStatus current = incident.getStatus();
+
+        // Guard: valid transition?
         java.util.Set<IncidentStatus> allowed = TRANSITIONS.getOrDefault(current, java.util.EnumSet.noneOf(IncidentStatus.class));
         if (!allowed.contains(newStatus))
-            return Response.error("Cannot transition from " + current + " to " + newStatus
-                    + ". Allowed: " + allowed);
+            return Response.error("Cannot transition from " + current + " to " + newStatus + ". Allowed: " + allowed);
+
+        // Guard: caller role authorised for this target status?
+        Role callerRole = LoggedUser.getRole();
+        java.util.Set<Role> permittedRoles = TRANSITION_ROLES.getOrDefault(newStatus, java.util.EnumSet.noneOf(Role.class));
+        if (callerRole != null && !permittedRoles.contains(callerRole))
+            return Response.error("Your role (" + callerRole + ") is not authorised to set status " + newStatus);
 
         incident.setStatus(newStatus);
-        if (newStatus == IncidentStatus.DISPATCHED) incident.setDispatchedAt(LocalDateTime.now());
-        if (newStatus == IncidentStatus.AT_SCENE)   incident.setAtSceneAt(LocalDateTime.now());
-        if (newStatus == IncidentStatus.RESOLVED)   incident.setResolvedAt(LocalDateTime.now());
+        LocalDateTime now = LocalDateTime.now();
+        if (newStatus == IncidentStatus.DISPATCHED)   incident.setDispatchedAt(now);
+        if (newStatus == IncidentStatus.ACKNOWLEDGED) incident.setAcknowledgedAt(now);
+        if (newStatus == IncidentStatus.EN_ROUTE)     incident.setEnRouteAt(now);
+        if (newStatus == IncidentStatus.AT_SCENE)     incident.setAtSceneAt(now);
+        if (newStatus == IncidentStatus.RESOLVED)     incident.setResolvedAt(now);
+        if (newStatus == IncidentStatus.CLOSED)       incident.setClosedAt(now);
         incident.update();
+
+        // Persist history record
+        IncidentStatusHistory history = IncidentStatusHistory.builder()
+                .incident(incident)
+                .fromStatus(current)
+                .toStatus(newStatus)
+                .changedByUid(LoggedUser.getUid())
+                .changedByName(LoggedUser.getName())
+                .changedByRole(callerRole != null ? callerRole.name() : null)
+                .changedAt(now)
+                .note(note)
+                .build();
 
         try {
             incident = incidentRepository.save(incident);
+            statusHistoryRepository.save(history);
             notifyStatusTransition(incident, newStatus);
-            log.info("Incident {} transitioned: {} → {}", incidentUid, current, newStatus);
+            log.info("Incident {} transitioned: {} → {} by {}", incidentUid, current, newStatus, LoggedUser.getUid());
             return Response.success(incident);
         } catch (Exception e) {
             log.error("Failed to transition incident status: {}", e.getMessage());
             return Response.error("Failed to update incident status");
         }
+    }
+
+    public Response<List<IncidentStatusHistory>> getStatusHistory(String incidentUid) {
+        if (incidentUid == null) return Response.error("Incident UID is required");
+        if (incidentRepository.findByUid(incidentUid).isEmpty())
+            return Response.error("Incident not found");
+        return Response.success(statusHistoryRepository.findByIncidentUid(incidentUid));
     }
 
     private void notifyStatusTransition(IncidentReport incident, IncidentStatus newStatus) {
@@ -499,29 +579,99 @@ public class IncidentReportService {
         notificationService.sendNotification(dto);
     }
 
-    // ── Dispatcher load balancing ─────────────────────────────────────────────
+    // ── Dispatcher load balancing with fallback ───────────────────────────────
 
     private void assignOnDutyDispatcher(IncidentReport incident) {
         java.time.LocalDate today = java.time.LocalDate.now();
         java.time.LocalTime now = java.time.LocalTime.now();
         java.util.List<com.smartincident.incidentbackend.dispatcher.entity.DispatcherShift> onDuty =
                 dispatcherShiftRepository.findOnDutyNow(today, now);
-        if (onDuty.isEmpty()) {
-            log.warn("No dispatcher on duty — incident {} will have no assigned dispatcher", incident.getTitle());
+
+        if (!onDuty.isEmpty()) {
+            // Least-active load balancing — DISPATCHER preferred over SUPERVISOR (bias +1000)
+            User dispatcher = onDuty.stream()
+                    .map(s -> s.getDispatcher())
+                    .min(java.util.Comparator.comparingLong(u -> {
+                        Long active = incidentRepository.countActiveIncidentsByDispatcher(u.getUid());
+                        long roleWeight = u.getRole() == Role.DISPATCHER ? 0L : 1000L;
+                        return (active != null ? active : 0L) + roleWeight;
+                    }))
+                    .orElseGet(() -> onDuty.get(0).getDispatcher());
+            incident.setAssignedDispatcher(dispatcher);
+            log.info("Incident auto-assigned to dispatcher: {} (least-active load balancing)", dispatcher.getName());
             return;
         }
-        // Least-active load balancing: assign to dispatcher with fewest unresolved incidents.
-        // DISPATCHER role is preferred over SUPERVISOR (bias of +1000 in sort key).
-        User dispatcher = onDuty.stream()
-                .map(s -> s.getDispatcher())
-                .min(java.util.Comparator.comparingLong(u -> {
-                    Long active = incidentRepository.countActiveIncidentsByDispatcher(u.getUid());
-                    long roleWeight = u.getRole() == Role.DISPATCHER ? 0L : 1000L;
-                    return (active != null ? active : 0L) + roleWeight;
-                }))
-                .orElseGet(() -> onDuty.get(0).getDispatcher());
-        incident.setAssignedDispatcher(dispatcher);
-        log.info("Incident auto-assigned to dispatcher: {} (least-active load balancing)", dispatcher.getName());
+
+        // Fallback 1: any DISPATCHER_SUPERVISOR active in the system
+        log.warn("No dispatcher on duty — falling back to DISPATCHER_SUPERVISOR for incident: {}", incident.getTitle());
+        java.util.List<User> supervisors = userRepository.findByRoleInAndIsActiveTrue(
+                java.util.List.of(Role.DISPATCHER_SUPERVISOR));
+        if (!supervisors.isEmpty()) {
+            User supervisor = supervisors.stream()
+                    .min(java.util.Comparator.comparingLong(u -> {
+                        Long active = incidentRepository.countActiveIncidentsByDispatcher(u.getUid());
+                        return active != null ? active : 0L;
+                    }))
+                    .orElse(supervisors.get(0));
+            incident.setAssignedDispatcher(supervisor);
+            log.warn("Incident {} assigned to supervisor fallback: {}", incident.getTitle(), supervisor.getName());
+            notifySupervisorFallback(incident, supervisor);
+            return;
+        }
+
+        // Fallback 2: any DISPATCH_CENTER_ADMIN
+        log.warn("No supervisor available — falling back to DISPATCH_CENTER_ADMIN for incident: {}", incident.getTitle());
+        java.util.List<User> dcAdmins = userRepository.findByRoleInAndIsActiveTrue(
+                java.util.List.of(Role.DISPATCH_CENTER_ADMIN));
+        if (!dcAdmins.isEmpty()) {
+            incident.setAssignedDispatcher(dcAdmins.get(0));
+            log.warn("Incident {} assigned to DC Admin fallback: {}", incident.getTitle(), dcAdmins.get(0).getName());
+            notifySupervisorFallback(incident, dcAdmins.get(0));
+            return;
+        }
+
+        log.error("CRITICAL: No dispatcher, supervisor, or DC admin available for incident: {}", incident.getTitle());
+        notifyNoDispatcherAvailable(incident);
+    }
+
+    private void notifySupervisorFallback(IncidentReport incident, User fallback) {
+        NotificationDto dto = new NotificationDto();
+        dto.setTitle("Dispatcher Fallback Alert");
+        dto.setMessage("No dispatcher on duty. Incident \"" + incident.getTitle()
+                + "\" assigned to " + fallback.getRole().name() + " " + fallback.getName()
+                + " as fallback.");
+        dto.setType(NotificationType.INCIDENT_ASSIGNED);
+        dto.setChannels(List.of(NotificationChannel.IN_APP, NotificationChannel.PUSH));
+        dto.setRelatedEntityUid(incident.getUid());
+        dto.setRelatedEntityType("INCIDENT");
+        dto.setTargetUserUids(List.of(fallback.getUid()));
+        notificationService.sendNotification(dto);
+    }
+
+    private void notifyNoDispatcherAvailable(IncidentReport incident) {
+        List<String> adminUids = userRepository.findByRoleInAndIsActiveTrue(
+                        List.of(Role.ROOT, Role.AGENCY_ADMIN))
+                .stream().map(User::getUid).toList();
+        if (adminUids.isEmpty()) return;
+        NotificationDto dto = new NotificationDto();
+        dto.setTitle("CRITICAL: No Dispatcher Available");
+        dto.setMessage("Incident \"" + incident.getTitle()
+                + "\" has no dispatcher assigned — no dispatcher, supervisor, or DC admin is active.");
+        dto.setType(NotificationType.INCIDENT_ASSIGNED);
+        dto.setChannels(List.of(NotificationChannel.IN_APP, NotificationChannel.PUSH));
+        dto.setRelatedEntityUid(incident.getUid());
+        dto.setRelatedEntityType("INCIDENT");
+        dto.setTargetUserUids(adminUids);
+        notificationService.sendNotification(dto);
+    }
+
+    private long slaMinutesForLevel(EmergencyLevel level) {
+        return switch (level) {
+            case CRITICAL -> 5;
+            case HIGH     -> 10;
+            case MEDIUM   -> 20;
+            case LOW      -> 60;
+        };
     }
 
     private boolean needsPolice(EmergencyCategory cat) {
@@ -577,6 +727,41 @@ public class IncidentReportService {
         return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
+    /**
+     * For NON_EMERGENCY incidents: assign to the nearest active police station.
+     * Uses simple proximity based on incident GPS coordinates; falls back to any active station.
+     */
+    private void resolveNearestPoliceStation(IncidentReport incident) {
+        if (incident.getAssignedPoliceStation() != null) return; // already set
+
+        try {
+            var stations = policeStationRepository.findAll().stream()
+                    .filter(s -> s.getIsActive() != null && s.getIsActive())
+                    .toList();
+            if (stations.isEmpty()) return;
+
+            if (incident.getLatitude() != null && incident.getLongitude() != null) {
+                double lat = incident.getLatitude();
+                double lon = incident.getLongitude();
+                var nearest = stations.stream()
+                        .filter(s -> s.getLocation() != null && s.getLocation().getLatitude() != null)
+                        .min(java.util.Comparator.comparingDouble(s -> {
+                            double dLat = s.getLocation().getLatitude()  - lat;
+                            double dLon = s.getLocation().getLongitude() - lon;
+                            return dLat * dLat + dLon * dLon;
+                        }))
+                        .orElse(stations.get(0));
+                incident.setAssignedPoliceStation(nearest);
+            } else {
+                incident.setAssignedPoliceStation(stations.get(0));
+            }
+            log.info("NON_EMERGENCY incident {} assigned to station {}",
+                    incident.getUid(), incident.getAssignedPoliceStation().getName());
+        } catch (Exception e) {
+            log.warn("Could not resolve nearest police station: {}", e.getMessage());
+        }
+    }
+
     private void resolveLeadAgency(IncidentReport incident,
                                    boolean needsPolice, boolean needsFire, boolean needsMedical) {
         String code = needsMedical ? "MEDICAL" : needsPolice ? "POLICE" : "FIRE";
@@ -586,19 +771,10 @@ public class IncidentReportService {
 
     private void createAgencyRecordsAndNotify(IncidentReport incident,
                                                boolean police, boolean fire, boolean medical) {
-        if (police) {
-            createAgencyRecord(incident, "POLICE", AgencyRole.LEAD);
-            notifyPoliceStation(incident);
-        }
-        if (medical) {
-            createAgencyRecord(incident, "MEDICAL", police ? AgencyRole.SUPPORT : AgencyRole.LEAD);
-            notifyEmergencyUnit(incident, "MEDICAL");
-        }
-        if (fire) {
-            AgencyRole role = (!police && !medical) ? AgencyRole.LEAD : AgencyRole.SUPPORT;
-            createAgencyRecord(incident, "FIRE", role);
-            notifyEmergencyUnit(incident, "FIRE");
-        }
+        if (police) createAgencyRecord(incident, "POLICE", AgencyRole.LEAD);
+        if (medical) createAgencyRecord(incident, "MEDICAL", police ? AgencyRole.SUPPORT : AgencyRole.LEAD);
+        if (fire)    createAgencyRecord(incident, "FIRE", (!police && !medical) ? AgencyRole.LEAD : AgencyRole.SUPPORT);
+        // Stations and units are notified at dispatch time (not at report time).
         notifyAllDispatchers(incident);
         notifyAssignedDispatcher(incident);
     }
@@ -732,6 +908,225 @@ public class IncidentReportService {
         dto.setRelatedEntityType("INCIDENT");
         dto.setTargetUserUids(supervisorUids);
         notificationService.sendNotification(dto);
+    }
+
+    // ── Closure Review Workflow (V2) ─────────────────────────────────────────
+
+    @Transactional
+    public Response<IncidentReport> stationReview(String incidentUid, String notes) {
+        Optional<IncidentReport> opt = incidentRepository.findByUid(incidentUid);
+        if (opt.isEmpty()) return Response.error("Incident not found");
+        IncidentReport incident = opt.get();
+
+        if (incident.getStatus() != IncidentStatus.RESOLVED)
+            return Response.error("Station review is only available for RESOLVED incidents");
+
+        User reviewer = userRepository.findByUid(LoggedUser.getUid()).orElse(null);
+        incident.setStationReviewedBy(reviewer);
+        incident.setStationReviewedAt(LocalDateTime.now());
+        incident.setStationReviewNotes(notes);
+        incident.update();
+        IncidentReport saved = incidentRepository.save(incident);
+
+        // Notify dispatcher that station review is complete
+        NotificationDto dto = new NotificationDto();
+        dto.setTitle("Station Review Complete");
+        dto.setMessage("Incident \"" + incident.getTitle() + "\" has been reviewed by the station. Dispatcher sign-off required.");
+        dto.setType(NotificationType.INCIDENT_UPDATE);
+        dto.setChannels(List.of(NotificationChannel.IN_APP, NotificationChannel.PUSH));
+        dto.setRelatedEntityUid(incidentUid);
+        dto.setRelatedEntityType("INCIDENT");
+        dto.setTargetRole(Role.DISPATCHER);
+        if (incident.getAssignedDispatcher() != null)
+            dto.setTargetUserUids(List.of(incident.getAssignedDispatcher().getUid()));
+        try { notificationService.sendNotification(dto); } catch (Exception ignored) {}
+
+        return Response.success(saved);
+    }
+
+    @Transactional
+    public Response<IncidentReport> dispatcherReview(String incidentUid, String notes) {
+        Optional<IncidentReport> opt = incidentRepository.findByUid(incidentUid);
+        if (opt.isEmpty()) return Response.error("Incident not found");
+        IncidentReport incident = opt.get();
+
+        if (incident.getStatus() != IncidentStatus.RESOLVED)
+            return Response.error("Dispatcher review is only available for RESOLVED incidents");
+        if (incident.getStationReviewedAt() == null)
+            return Response.error("Station review must be completed before dispatcher review");
+
+        User reviewer = userRepository.findByUid(LoggedUser.getUid()).orElse(null);
+        incident.setDispatcherReviewedBy(reviewer);
+        incident.setDispatcherReviewedAt(LocalDateTime.now());
+        incident.setDispatcherReviewNotes(notes);
+        incident.update();
+        return Response.success(incidentRepository.save(incident));
+    }
+
+    // ── Incident Commander Designation (Critical 4) ───────────────────────────
+
+    @Transactional
+    public Response<IncidentReport> designateCommander(String incidentUid, DesignateCommanderRequest req) {
+        if (incidentUid == null) return Response.error("Incident UID is required");
+        if (req == null || req.getCommanderUserUid() == null)
+            return Response.error("Commander user UID is required");
+
+        Optional<IncidentReport> opt = incidentRepository.findByUid(incidentUid);
+        if (opt.isEmpty()) return Response.error("Incident not found");
+        IncidentReport incident = opt.get();
+
+        Optional<User> commanderOpt = userRepository.findByUid(req.getCommanderUserUid());
+        if (commanderOpt.isEmpty()) return Response.error("Commander user not found");
+        User commander = commanderOpt.get();
+
+        incident.setIncidentCommander(commander);
+        if (req.getLeadAgencyUid() != null) {
+            agencyRepository.findByUid(req.getLeadAgencyUid())
+                    .ifPresent(obj -> incident.setIncidentCommanderAgency((Agency) obj));
+        } else {
+            incident.setIncidentCommanderAgency(commander.getAgency());
+        }
+        incident.update();
+
+        try {
+            IncidentReport saved = incidentRepository.save(incident);
+            notifyCommanderDesignation(saved, commander);
+            log.info("Commander {} designated for incident {}", commander.getName(), incidentUid);
+            return Response.success(saved);
+        } catch (Exception e) {
+            log.error("Failed to designate commander: {}", e.getMessage());
+            return Response.error("Failed to designate commander");
+        }
+    }
+
+    public Response<CommandStructureDto> getCommandStructure(String incidentUid) {
+        if (incidentUid == null) return Response.error("Incident UID is required");
+        Optional<IncidentReport> opt = incidentRepository.findByUid(incidentUid);
+        if (opt.isEmpty()) return Response.error("Incident not found");
+        IncidentReport incident = opt.get();
+
+        List<IncidentAgency> agencies = incidentAgencyRepository.findByIncidentUid(incidentUid);
+
+        List<CommandStructureDto.AgencySummary> agencySummaries = agencies.stream()
+                .map(ia -> CommandStructureDto.AgencySummary.builder()
+                        .agencyUid(ia.getAgency().getUid())
+                        .agencyName(ia.getAgency().getName())
+                        .agencyType(ia.getAgency().getAgencyType())
+                        .role(ia.getAgencyRole() != null ? ia.getAgencyRole().name() : null)
+                        .responseStatus(ia.getResponseStatus() != null ? ia.getResponseStatus().name() : null)
+                        .notifiedAt(ia.getNotifiedAt())
+                        .respondedAt(ia.getRespondedAt())
+                        .build())
+                .toList();
+
+        CommandStructureDto dto = CommandStructureDto.builder()
+                .incidentUid(incident.getUid())
+                .incidentTitle(incident.getTitle())
+                .commanderUid(incident.getIncidentCommander() != null ? incident.getIncidentCommander().getUid() : null)
+                .commanderName(incident.getIncidentCommander() != null ? incident.getIncidentCommander().getName() : null)
+                .commanderRole(incident.getIncidentCommander() != null ? incident.getIncidentCommander().getRole().name() : null)
+                .commanderPhone(incident.getIncidentCommander() != null ? incident.getIncidentCommander().getPhoneNumber() : null)
+                .leadAgencyUid(incident.getIncidentCommanderAgency() != null ? incident.getIncidentCommanderAgency().getUid() : null)
+                .leadAgencyName(incident.getIncidentCommanderAgency() != null ? incident.getIncidentCommanderAgency().getName() : null)
+                .leadAgencyType(incident.getIncidentCommanderAgency() != null ? incident.getIncidentCommanderAgency().getAgencyType() : null)
+                .eocActivated(incident.getEocActivated())
+                .isMajorIncident(incident.getIsMajorIncident())
+                .involvedAgencies(agencySummaries)
+                .build();
+
+        return Response.success(dto);
+    }
+
+    private void notifyCommanderDesignation(IncidentReport incident, User commander) {
+        List<IncidentAgency> agencies = incidentAgencyRepository.findByIncidentUid(incident.getUid());
+        java.util.Set<String> involvedAgencyUids = agencies.stream()
+                .map(ia -> ia.getAgency().getUid()).collect(java.util.stream.Collectors.toSet());
+        List<String> agencyAdminUids = userRepository.findByRoleInAndIsActiveTrue(List.of(Role.AGENCY_ADMIN))
+                .stream()
+                .filter(u -> u.getAgency() != null && involvedAgencyUids.contains(u.getAgency().getUid()))
+                .map(User::getUid)
+                .toList();
+        if (agencyAdminUids.isEmpty()) return;
+        NotificationDto dto = new NotificationDto();
+        dto.setTitle("Incident Commander Designated");
+        dto.setMessage(commander.getName() + " has been designated as Incident Commander for: " + incident.getTitle());
+        dto.setType(NotificationType.INCIDENT_ASSIGNED);
+        dto.setChannels(List.of(NotificationChannel.IN_APP, NotificationChannel.PUSH));
+        dto.setRelatedEntityUid(incident.getUid());
+        dto.setRelatedEntityType("INCIDENT");
+        dto.setTargetUserUids(agencyAdminUids);
+        notificationService.sendNotification(dto);
+    }
+
+    // ── Citizen Incident Timeline (High 1) ────────────────────────────────────
+
+    public Response<IncidentTimelineDto> getIncidentTimeline(String incidentUid) {
+        if (incidentUid == null) return Response.error("Incident UID is required");
+        Optional<IncidentReport> opt = incidentRepository.findByUid(incidentUid);
+        if (opt.isEmpty()) return Response.error("Incident not found");
+        IncidentReport incident = opt.get();
+
+        List<IncidentStatusHistory> history = statusHistoryRepository.findByIncidentUid(incidentUid);
+
+        List<IncidentTimelineDto.TimelineEvent> events = history.stream()
+                .map(h -> IncidentTimelineDto.TimelineEvent.builder()
+                        .timestamp(h.getChangedAt())
+                        .eventType("STATUS_CHANGE")
+                        .description(formatStatusChange(h.getFromStatus(), h.getToStatus()))
+                        .actorName(h.getChangedByName())
+                        .actorRole(h.getChangedByRole())
+                        .fromStatus(h.getFromStatus() != null ? h.getFromStatus().name() : null)
+                        .toStatus(h.getToStatus() != null ? h.getToStatus().name() : null)
+                        .note(h.getNote())
+                        .build())
+                .sorted(java.util.Comparator.comparing(IncidentTimelineDto.TimelineEvent::getTimestamp))
+                .toList();
+
+        IncidentTimelineDto dto = IncidentTimelineDto.builder()
+                .incidentUid(incident.getUid())
+                .title(incident.getTitle())
+                .type(incident.getType() != null ? incident.getType().name() : null)
+                .location(incident.getLocation())
+                .currentStatus(incident.getStatus().name())
+                .emergencyLevel(incident.getEmergencyLevel() != null ? incident.getEmergencyLevel().name() : null)
+                .emergencyCategory(incident.getEmergencyCategory() != null ? incident.getEmergencyCategory().name() : null)
+                .assignedPoliceStation(incident.getAssignedPoliceStation() != null ? incident.getAssignedPoliceStation().getName() : null)
+                .assignedUnit(incident.getAssignedUnit() != null ? incident.getAssignedUnit().getName() : null)
+                .assignedOfficer(incident.getAssignedOfficer() != null ? incident.getAssignedOfficer().getBadgeNumber() : null)
+                .assignedDispatcher(incident.getAssignedDispatcher() != null ? incident.getAssignedDispatcher().getName() : null)
+                .reportedAt(incident.getReportedAt())
+                .dispatchedAt(incident.getDispatchedAt())
+                .acknowledgedAt(incident.getAcknowledgedAt())
+                .enRouteAt(incident.getEnRouteAt())
+                .atSceneAt(incident.getAtSceneAt())
+                .resolvedAt(incident.getResolvedAt())
+                .closedAt(incident.getClosedAt())
+                .slaDeadline(incident.getSlaDeadline())
+                .slaBreached(incident.getSlaBreachedAt() != null)
+                .events(events)
+                .build();
+
+        return Response.success(dto);
+    }
+
+    private String formatStatusChange(IncidentStatus from, IncidentStatus to) {
+        String fromLabel = from != null ? from.name().replace('_', ' ') : "INITIAL";
+        String toLabel   = to   != null ? to.name().replace('_', ' ')   : "UNKNOWN";
+        return switch (to) {
+            case REPORTED            -> "Incident reported and logged";
+            case UNDER_REVIEW        -> "Incident is under review by dispatch";
+            case CLASSIFIED          -> "Incident has been classified and categorised";
+            case WAITING_FOR_DISPATCH-> "Incident is queued and awaiting unit dispatch";
+            case DISPATCHED          -> "Response units have been dispatched";
+            case ACKNOWLEDGED        -> "Responding units have acknowledged the dispatch";
+            case EN_ROUTE            -> "Responding units are en route to the scene";
+            case AT_SCENE            -> "Responding units have arrived at the scene";
+            case IN_PROGRESS         -> "Incident response is in progress";
+            case RESOLVED            -> "Incident has been resolved";
+            case CLOSED              -> "Incident has been officially closed";
+            case REJECTED            -> "Incident report was rejected";
+            default                  -> fromLabel + " → " + toLabel;
+        };
     }
 
     // ── Inner class ─────────────────────────────────────────────────────────

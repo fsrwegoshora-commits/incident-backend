@@ -26,6 +26,7 @@ public class OfficerShiftDto {
     private String excuseReason;
     private Boolean isReassigned;
     private String checkpointUid;
+    private String operationalPostUid;
 
 public OfficerShiftDto(OfficerShift shift) {
         this.uid = shift.getUid();
@@ -41,6 +42,7 @@ public OfficerShiftDto(OfficerShift shift) {
         this.isPunishmentMode = shift.getIsPunishmentMode();
         this.isReassigned = shift.getIsReassigned();
         this.checkpointUid = shift.getCheckpoint() != null ? shift.getCheckpoint().getUid() : null;
+        this.operationalPostUid = shift.getOperationalPost() != null ? shift.getOperationalPost().getUid() : null;
     }
 }
 

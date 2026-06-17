@@ -12,6 +12,7 @@ import com.smartincident.incidentbackend.enums.DispatchStatus;
 import com.smartincident.incidentbackend.incident.entity.IncidentReport;
 import com.smartincident.incidentbackend.incident.repository.IncidentReportRepository;
 import com.smartincident.incidentbackend.utils.Response;
+import com.smartincident.incidentbackend.utils.ResponseList;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
@@ -141,6 +142,25 @@ public class VehicleLocationService {
     public List<VehicleLocation> getTrail(String vehicleUid, int lastMinutes) {
         LocalDateTime since = LocalDateTime.now().minusMinutes(lastMinutes);
         return locationRepository.findTrailSince(vehicleUid, since);
+    }
+
+    /** Returns all vehicles that have a last-known GPS position, for the live tracking map. */
+    public ResponseList<?> getAllActiveVehiclePositions() {
+        List<VehicleLocationBroadcast> result = vehicleRepository.findAll().stream()
+                .filter(v -> Boolean.TRUE.equals(v.getIsActive())
+                        && v.getLatitude() != null
+                        && v.getLongitude() != null)
+                .map(v -> VehicleLocationBroadcast.builder()
+                        .vehicleUid(v.getUid())
+                        .plateNumber(v.getPlateNumber())
+                        .vehicleType(v.getVehicleType())
+                        .vehicleStatus(v.getStatus())
+                        .latitude(v.getLatitude())
+                        .longitude(v.getLongitude())
+                        .recordedAt(v.getLastLocationUpdate())
+                        .build())
+                .toList();
+        return new ResponseList<>(result);
     }
 
     /** Purge GPS trail older than 24 hours to keep the table lean. */

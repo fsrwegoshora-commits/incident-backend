@@ -4,6 +4,10 @@ import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.dispatcher.dto.UnitDispatchRequest;
 import com.smartincident.incidentbackend.emergency.entity.EmergencyUnit;
+import com.smartincident.incidentbackend.emergency.entity.EmergencyVehicle;
+import com.smartincident.incidentbackend.emergency.entity.IncidentDispatch;
+import com.smartincident.incidentbackend.emergency.repository.EmergencyVehicleRepository;
+import com.smartincident.incidentbackend.emergency.repository.IncidentDispatchRepository;
 import com.smartincident.incidentbackend.emergency.repository.EmergencyUnitRepository;
 import com.smartincident.incidentbackend.enums.*;
 import com.smartincident.incidentbackend.fire.entity.FireOfficer;
@@ -12,6 +16,7 @@ import com.smartincident.incidentbackend.incident.entity.IncidentAgency;
 import com.smartincident.incidentbackend.incident.entity.IncidentReport;
 import com.smartincident.incidentbackend.incident.repository.IncidentAgencyRepository;
 import com.smartincident.incidentbackend.incident.repository.IncidentReportRepository;
+import com.smartincident.incidentbackend.incident.service.IncidentReportService;
 import com.smartincident.incidentbackend.medical.entity.Medic;
 import com.smartincident.incidentbackend.medical.repository.MedicRepository;
 import com.smartincident.incidentbackend.notification.dto.NotificationDto;
@@ -26,8 +31,9 @@ import com.smartincident.incidentbackend.setting.entity.Agency;
 import com.smartincident.incidentbackend.setting.repository.AgencyRepository;
 import com.smartincident.incidentbackend.utils.LoggedUser;
 import com.smartincident.incidentbackend.utils.Response;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,7 +44,6 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class UnitDispatchService {
 
@@ -53,6 +58,41 @@ public class UnitDispatchService {
     private final AgencyRepository agencyRepository;
     private final NotificationService notificationService;
     private final UserRepository userRepository;
+    private final EmergencyVehicleRepository vehicleRepository;
+    private final IncidentDispatchRepository incidentDispatchRepository;
+    private final IncidentReportService incidentReportService;
+
+    @Autowired
+    public UnitDispatchService(
+            IncidentReportRepository incidentRepository,
+            PoliceStationRepository policeStationRepository,
+            EmergencyUnitRepository emergencyUnitRepository,
+            OfficerShiftRepository officerShiftRepository,
+            PoliceOfficerRepository policeOfficerRepository,
+            FireOfficerRepository fireOfficerRepository,
+            MedicRepository medicRepository,
+            IncidentAgencyRepository incidentAgencyRepository,
+            AgencyRepository agencyRepository,
+            NotificationService notificationService,
+            UserRepository userRepository,
+            EmergencyVehicleRepository vehicleRepository,
+            IncidentDispatchRepository incidentDispatchRepository,
+            @Lazy IncidentReportService incidentReportService) {
+        this.incidentRepository = incidentRepository;
+        this.policeStationRepository = policeStationRepository;
+        this.emergencyUnitRepository = emergencyUnitRepository;
+        this.officerShiftRepository = officerShiftRepository;
+        this.policeOfficerRepository = policeOfficerRepository;
+        this.fireOfficerRepository = fireOfficerRepository;
+        this.medicRepository = medicRepository;
+        this.incidentAgencyRepository = incidentAgencyRepository;
+        this.agencyRepository = agencyRepository;
+        this.notificationService = notificationService;
+        this.userRepository = userRepository;
+        this.vehicleRepository = vehicleRepository;
+        this.incidentDispatchRepository = incidentDispatchRepository;
+        this.incidentReportService = incidentReportService;
+    }
 
     @Transactional
     public Response<IncidentReport> dispatchUnits(String incidentUid, UnitDispatchRequest req) {
@@ -102,6 +142,7 @@ public class UnitDispatchService {
             }
 
             ensureAgencyRecord(incident, "POLICE", AgencyRole.LEAD);
+            notifyStationCommand(incident, station);
         }
 
         // ── Fire Unit dispatch ────────────────────────────────────────────────
@@ -120,6 +161,9 @@ public class UnitDispatchService {
 
             ensureAgencyRecord(incident, "FIRE",
                     incident.getRequiresPoliceService() ? AgencyRole.SUPPORT : AgencyRole.LEAD);
+
+            // Auto-assign an available fire vehicle from this unit
+            autoAssignVehicle(incident, fireUnit.getUid(), VehicleType.FIRE_TRUCK, dispatcher, req.getNotes());
         }
 
         // ── Medical Unit dispatch ─────────────────────────────────────────────
@@ -139,21 +183,62 @@ public class UnitDispatchService {
             ensureAgencyRecord(incident, "MEDICAL",
                     incident.getRequiresPoliceService() || incident.getRequiresFireService()
                             ? AgencyRole.SUPPORT : AgencyRole.LEAD);
+
+            // Auto-assign an available ambulance from this medical unit
+            autoAssignVehicle(incident, medUnit.getUid(), VehicleType.AMBULANCE, dispatcher, req.getNotes());
         }
 
-        incident.setStatus(IncidentStatus.DISPATCHED);
+        // ── Persist unit/station assignments, then route through state machine ─
         incident.update();
+        incident = incidentRepository.save(incident);
 
-        try {
-            incident = incidentRepository.save(incident);
-            notifyResponders(incident, responderUids);
-            notifyDispatcher(incident, dispatcher);
-            log.info("Units dispatched to incident {} — {} responders notified", incidentUid, responderUids.size());
-            return Response.success(incident);
-        } catch (Exception e) {
-            log.error("Failed to dispatch units: {}", e.getMessage());
-            return Response.error("Dispatch failed: " + e.getMessage());
+        // Cascade: REPORTED → CLASSIFIED → WAITING_FOR_DISPATCH → DISPATCHED
+        IncidentStatus currentStatus = incident.getStatus();
+        if (currentStatus == IncidentStatus.REPORTED) {
+            incidentReportService.transitionStatus(incidentUid, IncidentStatus.CLASSIFIED, "Auto-classified during dispatch");
+            incidentReportService.transitionStatus(incidentUid, IncidentStatus.WAITING_FOR_DISPATCH, "Queued for dispatch");
+        } else if (currentStatus == IncidentStatus.CLASSIFIED) {
+            incidentReportService.transitionStatus(incidentUid, IncidentStatus.WAITING_FOR_DISPATCH, "Queued for dispatch");
         }
+        // Final state machine transition to DISPATCHED (persists history + sets dispatchedAt)
+        Response<IncidentReport> dispatchResult = incidentReportService.transitionStatus(
+                incidentUid, IncidentStatus.DISPATCHED,
+                req.getNotes() != null ? req.getNotes() : "Units dispatched");
+        if (!Boolean.TRUE.equals(dispatchResult.success())) {
+            return Response.error("Dispatch failed: " + dispatchResult.getMessage());
+        }
+
+        incident = dispatchResult.getData();
+        notifyResponders(incident, responderUids);
+        notifyDispatcher(incident, dispatcher);
+        log.info("Units dispatched to incident {} — {} responders notified", incidentUid, responderUids.size());
+        return Response.success(incident);
+    }
+
+    private void autoAssignVehicle(IncidentReport incident, String unitUid,
+                                   VehicleType preferredType, User dispatcher, String notes) {
+        List<EmergencyVehicle> available = vehicleRepository.findAvailableAtStation(unitUid, preferredType);
+        if (available.isEmpty()) {
+            available = vehicleRepository.findByUnitUidAndStatus(unitUid, VehicleStatus.AVAILABLE);
+        }
+        if (available.isEmpty()) {
+            log.warn("No available vehicle found for unit {} — dispatching without vehicle assignment", unitUid);
+            return;
+        }
+        EmergencyVehicle vehicle = available.get(0);
+        vehicle.setStatus(VehicleStatus.DISPATCHED);
+        vehicleRepository.save(vehicle);
+
+        IncidentDispatch dispatch = IncidentDispatch.builder()
+                .incident(incident)
+                .vehicle(vehicle)
+                .dispatchedBy(dispatcher)
+                .status(DispatchStatus.PENDING)
+                .etaMinutes(10)
+                .notes(notes)
+                .build();
+        incidentDispatchRepository.save(dispatch);
+        log.info("Auto-assigned vehicle {} ({}) to incident {}", vehicle.getPlateNumber(), preferredType, incident.getUid());
     }
 
     /** Returns all currently active (DISPATCHED / IN_PROGRESS) incidents. */
@@ -220,5 +305,21 @@ public class UnitDispatchService {
         dto.setRelatedEntityType("INCIDENT");
         dto.setTargetUserUids(List.of(dispatcher.getUid()));
         notificationService.sendNotification(dto);
+    }
+
+    private void notifyStationCommand(IncidentReport incident, PoliceStation station) {
+        // Notify STATION_ADMIN at the parent station so command has full operational visibility.
+        NotificationDto dto = new NotificationDto();
+        dto.setTitle("Incident Dispatched to Your Station");
+        dto.setMessage("\"" + incident.getTitle() + "\" ["
+                + incident.getEmergencyLevel().name() + "] has been dispatched to "
+                + station.getName() + ". Response required.");
+        dto.setType(NotificationType.INCIDENT_ASSIGNED);
+        dto.setChannels(List.of(NotificationChannel.IN_APP, NotificationChannel.PUSH));
+        dto.setRelatedEntityUid(incident.getUid());
+        dto.setRelatedEntityType("INCIDENT");
+        dto.setTargetRole(Role.STATION_ADMIN);
+        dto.setTargetStationUid(station.getUid());
+        notificationService.sendNotificationByRoleAndPoliceStation(dto);
     }
 }

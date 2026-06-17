@@ -54,26 +54,44 @@ public class AuditAspect {
             HttpServletRequest req = ((ServletRequestAttributes)
                     RequestContextHolder.currentRequestAttributes()).getRequest();
 
-            String method  = req.getMethod();
-            String uri     = req.getRequestURI();
-            String ip      = resolveClientIp(req);
-
-            String action  = httpMethodToAction(method);
-            String entityType = jp.getTarget().getClass()
-                    .getSimpleName().replace("Controller", "");
+            String method     = req.getMethod();
+            String uri        = req.getRequestURI();
+            String ip         = resolveClientIp(req);
+            String action     = httpMethodToAction(method);
+            String entityType = jp.getTarget().getClass().getSimpleName().replace("Controller", "");
             String entityUid  = extractEntityUid(result);
             String methodName = jp.getSignature().getName();
+            String category   = resolveCategory(entityType, uri);
+
+            // Capture old→new for status transitions on incidents
+            String oldValue = null;
+            String newValue = extractStatusParam(req);
 
             auditLogService.log(
                     LoggedUser.getUid(),
                     LoggedUser.getName(),
                     roleString(),
                     action, entityType, entityUid,
-                    uri, method, toReadable(methodName), ip, success);
+                    uri, method, toReadable(methodName), ip, success,
+                    oldValue, newValue, category);
 
         } catch (Exception e) {
             log.debug("AuditAspect capture failed: {}", e.getMessage());
         }
+    }
+
+    private static String resolveCategory(String entityType, String uri) {
+        if (uri.contains("/auth") || uri.contains("/citizen")) return "AUTH";
+        if (uri.contains("/incident")) return "INCIDENT";
+        if (uri.contains("/user"))     return "USER";
+        if (uri.contains("/dispatch") || uri.contains("/emergency")) return "RESOURCE";
+        if (entityType.toLowerCase().contains("agency") || entityType.toLowerCase().contains("setting")) return "CONFIG";
+        return "GENERAL";
+    }
+
+    private static String extractStatusParam(HttpServletRequest req) {
+        String status = req.getParameter("status");
+        return status;
     }
 
     private static String httpMethodToAction(String httpMethod) {

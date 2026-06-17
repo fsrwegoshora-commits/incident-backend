@@ -39,4 +39,11 @@ public interface VehicleShiftRepository extends JpaRepository<VehicleShift, Long
     List<VehicleShift> findByVehicleUidAndDate(String vehicleUid, LocalDate date);
 
     boolean existsByVehicleUidAndShiftDate(String vehicleUid, LocalDate shiftDate);
+
+    @Query("""
+        select s from VehicleShift s
+        where s.shiftDate = :date
+          and s.isActive = true
+        """)
+    List<VehicleShift> findActiveByDate(LocalDate date);
 }

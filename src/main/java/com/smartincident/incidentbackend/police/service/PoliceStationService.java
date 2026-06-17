@@ -1,12 +1,15 @@
 package com.smartincident.incidentbackend.police.service;
 
+import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.enums.StationLevel;
 import com.smartincident.incidentbackend.police.dto.PoliceStationDto;
 import com.smartincident.incidentbackend.police.entity.Location;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
 import com.smartincident.incidentbackend.police.repository.PoliceStationRepository;
 import com.smartincident.incidentbackend.setting.entity.AdministrativeArea;
+import com.smartincident.incidentbackend.setting.entity.Agency;
 import com.smartincident.incidentbackend.setting.repository.AdministrativeAreaRepository;
+import com.smartincident.incidentbackend.setting.repository.AgencyRepository;
 import com.smartincident.incidentbackend.utils.*;
 import io.leangen.graphql.spqr.spring.annotations.GraphQLApi;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +29,7 @@ public class PoliceStationService {
 
     private final PoliceStationRepository policeStationRepository;
     private final AdministrativeAreaRepository administrativeAreaRepository;
+    private final AgencyRepository agencyRepository;
 
     public Response<PoliceStation> savePoliceStation(PoliceStationDto dto) {
         if (dto == null)
@@ -41,6 +45,11 @@ public class PoliceStationService {
 
         StationLevel level = dto.getLevel() != null ? dto.getLevel() : StationLevel.POLICE_STATION;
 
+        // Resolve owning agency
+        Agency agency = resolveAgency(dto.getAgencyUid());
+        if (dto.getUid() == null && agency == null)
+            return Response.error("Agency assignment is required. Specify agencyUid or log in as Agency Administrator.");
+
         PoliceStation policeStation;
 
         if (dto.getUid() != null) {
@@ -49,9 +58,21 @@ public class PoliceStationService {
                 return Response.error("Invalid police station provided");
 
             policeStation = oPoliceStation.get();
+
+            // AGENCY_ADMIN can only update stations belonging to their agency
+            if (LoggedUser.isAgencyAdmin()) {
+                String adminAgencyUid = LoggedUser.getAgencyUid();
+                String stationAgencyUid = policeStation.getAgency() != null ? policeStation.getAgency().getUid() : null;
+                if (adminAgencyUid == null || !adminAgencyUid.equals(stationAgencyUid))
+                    return Response.error("You are not authorized to update this station");
+            }
+
             policeStation.setName(dto.getName());
             policeStation.setContactInfo(dto.getContactInfo());
             policeStation.setLevel(level);
+            // Agency only updated by ROOT when explicitly provided
+            if (LoggedUser.isRoot() && agency != null)
+                policeStation.setAgency(agency);
 
             if (dto.getAdministrativeAreaUid() != null) {
                 administrativeAreaRepository.findByUid(dto.getAdministrativeAreaUid())
@@ -73,6 +94,7 @@ public class PoliceStationService {
             policeStation.setName(dto.getName());
             policeStation.setContactInfo(dto.getContactInfo());
             policeStation.setLevel(level);
+            policeStation.setAgency(agency);
 
             if (dto.getAdministrativeAreaUid() != null) {
                 administrativeAreaRepository.findByUid(dto.getAdministrativeAreaUid())
@@ -89,13 +111,31 @@ public class PoliceStationService {
 
         try {
             policeStation = policeStationRepository.save(policeStation);
-            log.info("Police station saved successfully: {}", policeStation.getName());
+            log.info("Police station '{}' saved under agency '{}'", policeStation.getName(),
+                policeStation.getAgency() != null ? policeStation.getAgency().getName() : "none");
         } catch (Exception e) {
             log.error("Failed to save police station: {}", e.getMessage());
             return Response.error("Failed to save police station: " + e.getMessage());
         }
 
         return new Response<>(policeStation);
+    }
+
+    /**
+     * Resolves the agency to assign to a station.
+     * AGENCY_ADMIN: always uses their own agency (ignores dto value).
+     * ROOT: uses the agencyUid from the DTO if provided.
+     */
+    private Agency resolveAgency(String dtoAgencyUid) {
+        if (LoggedUser.isAgencyAdmin()) {
+            String agencyUid = LoggedUser.getAgencyUid();
+            if (agencyUid == null) return null;
+            return agencyRepository.findByUid(agencyUid).orElse(null);
+        }
+        if (dtoAgencyUid != null) {
+            return agencyRepository.findByUid(dtoAgencyUid).orElse(null);
+        }
+        return null;
     }
 
     private PoliceStation resolveParent(String parentUid) {
@@ -119,6 +159,16 @@ public class PoliceStationService {
             return new Response<>("Invalid police station provided");
         if (!optionalPoliceStation.get().getIsActive())
             return new Response<>("police station already deleted");
+
+        // AGENCY_ADMIN can only delete stations belonging to their agency
+        if (LoggedUser.isAgencyAdmin()) {
+            String adminAgencyUid = LoggedUser.getAgencyUid();
+            String stationAgencyUid = optionalPoliceStation.get().getAgency() != null
+                ? optionalPoliceStation.get().getAgency().getUid() : null;
+            if (adminAgencyUid == null || !adminAgencyUid.equals(stationAgencyUid))
+                return Response.error("You are not authorized to delete this station");
+        }
+
         optionalPoliceStation.get().delete();
         PoliceStation policeStation = optionalPoliceStation.get();
         try {
@@ -132,13 +182,48 @@ public class PoliceStationService {
         return Response.success(policeStation);
     }
 
-    public ResponsePage<PoliceStation> getPoliceStations(PageableParam pageableParam) {
-        String stationUid = LoggedUser.getPoliceStationUid();
-        return new ResponsePage<>(policeStationRepository.getPoliceStations(pageableParam.getPageable(true), pageableParam.getIsActive(), pageableParam.key(),stationUid));
+    public ResponsePage<PoliceStation> getPoliceStations(PageableParam pageableParam, String filterAgencyUid) {
+        Role role = LoggedUser.getRole();
+
+        if (role == Role.AGENCY_ADMIN) {
+            // AGENCY_ADMIN sees stations assigned to their agency
+            // AND stations not yet assigned to any agency (so orphan stations are claimable).
+            String agencyUid = LoggedUser.getAgencyUid();
+            if (agencyUid == null) {
+                // No agency linked to this admin — return all active stations as safe fallback
+                return new ResponsePage<>(policeStationRepository.getPoliceStations(
+                    pageableParam.getPageable(true), pageableParam.getIsActive(), pageableParam.key(), null, null));
+            }
+            return new ResponsePage<>(policeStationRepository.getPoliceStationsForAgencyAdmin(
+                pageableParam.getPageable(true), pageableParam.getIsActive(), pageableParam.key(), agencyUid));
+        }
+
+        String stationUid = null;
+        String agencyUid  = null;
+
+        if (role == Role.STATION_ADMIN) {
+            stationUid = LoggedUser.getPoliceStationUid();
+        } else if (role == Role.ROOT && filterAgencyUid != null) {
+            agencyUid = filterAgencyUid;
+        }
+        // DISPATCHER_SUPERVISOR, DISPATCHER, DISPATCH_CENTER_ADMIN, ROOT (no filter):
+        // stationUid and agencyUid remain null → query returns all active stations
+
+        return new ResponsePage<>(policeStationRepository.getPoliceStations(
+            pageableParam.getPageable(true), pageableParam.getIsActive(), pageableParam.key(), stationUid, agencyUid));
     }
 
     public ResponseList<PoliceStation> getNearbyPoliceStations(double latitude, double longitude, double maxDistance) {
-        List<PoliceStation> allStations = policeStationRepository.findByIsActiveTrue();
+        Role role = LoggedUser.getRole();
+        List<PoliceStation> allStations;
+        if (role == Role.AGENCY_ADMIN) {
+            String agencyUid = LoggedUser.getAgencyUid();
+            allStations = agencyUid != null
+                    ? policeStationRepository.findByAgencyUidAndIsActiveTrue(agencyUid)
+                    : List.of();
+        } else {
+            allStations = policeStationRepository.findByIsActiveTrue();
+        }
 
         List<PoliceStation> nearbyStations = allStations.stream()
                 .filter(station -> station.getLocation() != null)

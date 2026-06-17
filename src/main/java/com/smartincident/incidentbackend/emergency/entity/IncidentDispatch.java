@@ -52,4 +52,17 @@ public class IncidentDispatch extends BaseEntity {
     // Estimated time of arrival in minutes (recalculated as vehicle moves)
     @Column
     private Integer etaMinutes;
+
+    // Denormalized crew snapshot at the time of dispatch (from active VehicleShift)
+    @Column(length = 30)
+    private String vehiclePlate;
+
+    @Column(length = 150)
+    private String driverName;
+
+    @Column(length = 150)
+    private String commanderName;
+
+    @Column(columnDefinition = "TEXT")
+    private String crewJson;
 }

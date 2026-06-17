@@ -35,4 +35,7 @@ public class PoliceStationDto {
 
     @GraphQLInputField(name = "parentStationUid", description = "UID of the parent station (required for all levels except NATIONAL_HQ)")
     private String parentStationUid;
+
+    @GraphQLInputField(name = "agencyUid", description = "UID of the owning agency (required for ROOT; auto-assigned for AGENCY_ADMIN)")
+    private String agencyUid;
 }

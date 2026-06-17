@@ -3,6 +3,7 @@ package com.smartincident.incidentbackend.authotp.service;
 import com.smartincident.incidentbackend.authotp.dto.UserDto;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.security.JwtAuthInterceptor;
+import com.smartincident.incidentbackend.enums.SupportedLanguage;
 import com.smartincident.incidentbackend.emergency.entity.EmergencyUnit;
 import com.smartincident.incidentbackend.emergency.repository.EmergencyUnitRepository;
 import com.smartincident.incidentbackend.enums.Role;
@@ -11,6 +12,8 @@ import com.smartincident.incidentbackend.medical.entity.Hospital;
 import com.smartincident.incidentbackend.medical.repository.HospitalRepository;
 import com.smartincident.incidentbackend.police.entity.PoliceStation;
 import com.smartincident.incidentbackend.police.repository.PoliceStationRepository;
+import com.smartincident.incidentbackend.setting.entity.Agency;
+import com.smartincident.incidentbackend.setting.repository.AgencyRepository;
 import com.smartincident.incidentbackend.utils.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +31,7 @@ public class UserService {
     private final EmergencyUnitRepository emergencyUnitRepository;
     private final HospitalRepository hospitalRepository;
     private final PoliceStationRepository policeStationRepository;
+    private final AgencyRepository agencyRepository;
     private final OtpService otpService;
     private final JwtAuthInterceptor jwtAuthInterceptor;
     private final JwtService jwtService;
@@ -385,6 +389,71 @@ public class UserService {
         }
 
         return Response.success(user);
+    }
+
+    public Response<User> registerAgencyAdmin(String agencyUid, UserDto userDto) {
+        if (agencyUid == null || agencyUid.isBlank())
+            return Response.error("Agency UID is required");
+
+        Optional<Agency> agencyOpt = agencyRepository.findByUid(agencyUid);
+        if (agencyOpt.isEmpty())
+            return Response.error("Agency not found");
+
+        if (userDto.getName() == null || userDto.getName().isBlank())
+            return Response.error("Name is required");
+        if (userDto.getUsername() == null || userDto.getUsername().isBlank())
+            return Response.error("Username is required");
+        if (userDto.getPassword() == null || userDto.getPassword().isBlank())
+            return Response.error("Password is required");
+        if (userDto.getPassword().length() < 8)
+            return Response.error("Password must be at least 8 characters");
+
+        String username = userDto.getUsername().trim();
+        if (userRepository.existsByUsername(username))
+            return Response.error("Username '" + username + "' is already taken");
+
+        if (userDto.getPhoneNumber() != null && !userDto.getPhoneNumber().isBlank()) {
+            String phone = userDto.getPhoneNumber().trim();
+            if (userRepository.existsByPhoneNumberAndIsActiveTrue(phone))
+                return Response.error("Phone number is already registered");
+        }
+
+        User user = new User();
+        user.setName(userDto.getName().trim());
+        user.setUsername(username);
+        user.setPasswordHash(passwordEncoder.encode(userDto.getPassword()));
+        user.setPhoneNumber(userDto.getPhoneNumber() != null && !userDto.getPhoneNumber().isBlank()
+                ? userDto.getPhoneNumber().trim() : null);
+        user.setRole(Role.AGENCY_ADMIN);
+        user.setAgency(agencyOpt.get());
+        user.setVerified(true);
+
+        try {
+            User saved = userRepository.save(user);
+            log.info("Registered AGENCY_ADMIN '{}' for agency '{}'", saved.getUsername(), agencyOpt.get().getName());
+            return Response.success(saved);
+        } catch (Exception e) {
+            log.error("Failed to register agency admin: {}", e.getMessage());
+            return Response.error("Failed to register admin: " + Utils.getExceptionMessage(e));
+        }
+    }
+
+    public Response<User> updatePreferredLanguage(String phoneNumber, String langCode) {
+        Optional<User> oUser = userRepository.findByPhoneNumber(phoneNumber);
+        if (oUser.isEmpty()) return Response.error("User not found");
+
+        SupportedLanguage lang = SupportedLanguage.fromCode(langCode);
+        User user = oUser.get();
+        user.setPreferredLanguage(lang.getCode());
+        user.update();
+
+        try {
+            userRepository.save(user);
+            log.info("Language preference updated to '{}' for user: {}", lang.getCode(), phoneNumber);
+            return Response.success(user);
+        } catch (Exception e) {
+            return Response.error("Failed to update language preference: " + e.getMessage());
+        }
     }
 
     public Response<User> deleteOwnAccount(String phoneNumber, String currentToken) { // ADD currentToken PARAMETER

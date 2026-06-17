@@ -35,21 +35,24 @@ public class TrafficCheckPointController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT,
+                     Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.DISPATCHER})
     @GetMapping("/{uid}")
     public Response<TrafficCheckpoint> getTrafficCheckpoint(@PathVariable String uid) {
         return trafficCheckPointService.getTrafficCheckpointByUid(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT,
+                     Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.DISPATCHER})
     @GetMapping
     public ResponsePage<TrafficCheckpoint> getTrafficCheckpoints(@ModelAttribute PageableParam pageableParam) {
         return trafficCheckPointService.getCheckpoints(pageableParam != null ? pageableParam : new PageableParam());
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT,
+                     Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.DISPATCHER})
     @GetMapping("/station/{stationUid}")
     public ResponsePage<TrafficCheckpoint> getTrafficCheckpointsByPoliceStation(
             @ModelAttribute PageableParam pageableParam,

@@ -19,10 +19,14 @@ public class ChatMessageController {
 
     private final ChatMessageService chatMessageService;
 
+    /** Send a message on an incident channel. Open to all operational roles — Dispatchers, Officers, and Station Admins. */
     @Authenticated
+    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
+                     Role.POLICE_OFFICER, Role.FIRE_OFFICER, Role.MEDIC,
+                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
     @PostMapping
     public Response<ChatMessage> sendMessage(@RequestBody ChatMessageDto dto) {
-        log.info(" Sending chat message for incident: {}", dto.getIncidentUid());
+        log.info("Sending chat message for incident: {}", dto.getIncidentUid());
         return chatMessageService.sendMessage(dto);
     }
 
@@ -34,7 +38,7 @@ public class ChatMessageController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
     @PostMapping("/system")
     public Response<ChatMessage> sendSystemMessage(@RequestParam String incidentUid, @RequestParam String message) {
         log.info("Sending system message");

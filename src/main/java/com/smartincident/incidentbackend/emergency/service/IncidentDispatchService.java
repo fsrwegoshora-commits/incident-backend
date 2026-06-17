@@ -1,12 +1,15 @@
 package com.smartincident.incidentbackend.emergency.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.emergency.dto.DispatchDto;
 import com.smartincident.incidentbackend.emergency.entity.EmergencyVehicle;
 import com.smartincident.incidentbackend.emergency.entity.IncidentDispatch;
+import com.smartincident.incidentbackend.emergency.entity.VehicleShift;
 import com.smartincident.incidentbackend.emergency.repository.EmergencyVehicleRepository;
 import com.smartincident.incidentbackend.emergency.repository.IncidentDispatchRepository;
+import com.smartincident.incidentbackend.emergency.repository.VehicleShiftRepository;
 import com.smartincident.incidentbackend.enums.DispatchStatus;
 import com.smartincident.incidentbackend.enums.VehicleStatus;
 import com.smartincident.incidentbackend.incident.entity.IncidentReport;
@@ -17,9 +20,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +35,8 @@ public class IncidentDispatchService {
     private final EmergencyVehicleRepository vehicleRepository;
     private final IncidentReportRepository incidentRepository;
     private final UserRepository userRepository;
+    private final VehicleShiftRepository vehicleShiftRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public Response<IncidentDispatch> dispatch(DispatchDto dto) {
@@ -53,6 +60,55 @@ public class IncidentDispatchService {
                 ? userRepository.findByUid(dispatcherUid).orElse(null)
                 : null;
 
+        // Resolve crew from today's active VehicleShift (or use DTO overrides)
+        String driverName = null;
+        String commanderName = null;
+        String crewJson = null;
+
+        List<VehicleShift> activeShifts = vehicleShiftRepository
+                .findByVehicleUidAndDate(dto.getVehicleUid(), LocalDate.now());
+        VehicleShift shift = activeShifts.isEmpty() ? null : activeShifts.get(0);
+
+        if (shift != null) {
+            // Police vehicle
+            if (shift.getCrew() != null && !shift.getCrew().isEmpty()) {
+                List<String> names = shift.getCrew().stream()
+                        .filter(o -> o.getUserAccount() != null)
+                        .map(o -> o.getUserAccount().getName())
+                        .collect(Collectors.toList());
+                crewJson = toJson(names);
+                if (!names.isEmpty()) driverName = names.get(0);
+            }
+            // Fire vehicle
+            if (shift.getFireCrewDriver() != null && shift.getFireCrewDriver().getUserAccount() != null) {
+                driverName = shift.getFireCrewDriver().getUserAccount().getName();
+            }
+            if (shift.getFireCrewCommander() != null && shift.getFireCrewCommander().getUserAccount() != null) {
+                commanderName = shift.getFireCrewCommander().getUserAccount().getName();
+            }
+            if (shift.getFireCrew() != null && !shift.getFireCrew().isEmpty()) {
+                List<String> names = shift.getFireCrew().stream()
+                        .filter(o -> o.getUserAccount() != null)
+                        .map(o -> o.getUserAccount().getName())
+                        .collect(Collectors.toList());
+                crewJson = toJson(names);
+            }
+            // Ambulance
+            if (shift.getDriver() != null && shift.getDriver().getUserAccount() != null) {
+                driverName = shift.getDriver().getUserAccount().getName();
+            }
+            if (shift.getInCharge() != null && shift.getInCharge().getUserAccount() != null) {
+                commanderName = shift.getInCharge().getUserAccount().getName();
+            }
+            if (shift.getMedics() != null && !shift.getMedics().isEmpty()) {
+                List<String> names = shift.getMedics().stream()
+                        .filter(m -> m.getUserAccount() != null)
+                        .map(m -> m.getUserAccount().getName())
+                        .collect(Collectors.toList());
+                crewJson = toJson(names);
+            }
+        }
+
         IncidentDispatch dispatch = IncidentDispatch.builder()
                 .incident(incidentOpt.get())
                 .vehicle(vehicle)
@@ -60,6 +116,10 @@ public class IncidentDispatchService {
                 .status(DispatchStatus.PENDING)
                 .dispatchedAt(LocalDateTime.now())
                 .notes(dto.getNotes())
+                .vehiclePlate(vehicle.getPlateNumber())
+                .driverName(driverName)
+                .commanderName(commanderName)
+                .crewJson(crewJson)
                 .build();
 
         // Mark vehicle as dispatched
@@ -130,5 +190,13 @@ public class IncidentDispatchService {
         if (stationUid == null) stationUid = LoggedUser.getStationUid();
         if (stationUid == null) return ResponseList.error("Station context missing");
         return new ResponseList<>(dispatchRepository.findActiveDispatchesByStation(stationUid));
+    }
+
+    private String toJson(List<String> list) {
+        try {
+            return objectMapper.writeValueAsString(list);
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

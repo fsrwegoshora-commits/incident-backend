@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.repository.query.Param;
 
 public interface PoliceOfficerRepository extends JpaRepository<PoliceOfficer, Long> {
 
@@ -40,6 +41,28 @@ public interface PoliceOfficerRepository extends JpaRepository<PoliceOfficer, Lo
 
     @Query("select p from PoliceOfficer p where p.userAccount.uid = :userUid and p.isActive = true")
     Optional<PoliceOfficer> findByUserUidAndIsActiveTrue(String userUid);
+
+    /**
+     * AGENCY_ADMIN scope: officers in stations belonging to the admin's agency
+     * OR in stations not yet assigned to any agency (same inclusive logic as getPoliceStationsForAgencyAdmin).
+     */
+    @Query("""
+    select p from PoliceOfficer p
+    left join p.policeStation s
+    left join s.agency a
+    where lower(concat(p.userAccount.name, p.userAccount.phoneNumber)) like %:key%
+      and (:isActive is null or p.isActive = :isActive)
+      and (a.uid = :agencyUid or a.uid is null)
+    order by case p.code
+      when 'ISP'   then 1 when 'A_ISP' then 2 when 'SM'    then 3
+      when 'S_SGT' then 4 when 'SGT'   then 5 when 'CPL'   then 6
+      when 'PC'    then 7 else 8 end asc
+    """)
+    Page<PoliceOfficer> getPoliceOfficersForAgencyAdmin(
+            Pageable pageable,
+            @Param("isActive") Boolean isActive,
+            @Param("key") String key,
+            @Param("agencyUid") String agencyUid);
 
     boolean existsByUserAccount(User user);
 

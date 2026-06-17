@@ -1,6 +1,9 @@
 package com.smartincident.incidentbackend.authotp.security;
 
+import com.smartincident.incidentbackend.authotp.entity.User;
+import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.authotp.service.JwtService;
+import com.smartincident.incidentbackend.utils.LoggedUser;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,6 +24,7 @@ import java.util.List;
 public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final UserRepository userRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -28,21 +32,30 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                                     FilterChain filterChain) throws ServletException, IOException {
         String header = request.getHeader("Authorization");
 
-        if (header != null && header.startsWith("Bearer ")) {
-            String token = header.substring(7);
-            try {
-                if (jwtService.isTokenValid(token)) {
-                    String phone = jwtService.extractPhone(token);
-                    UsernamePasswordAuthenticationToken auth =
-                            new UsernamePasswordAuthenticationToken(phone, null, List.of());
-                    SecurityContextHolder.getContext().setAuthentication(auth);
-                }
-            } catch (Exception e) {
-                log.debug("JWT validation failed for request {}: {}", request.getRequestURI(), e.getMessage());
-                SecurityContextHolder.clearContext();
-            }
-        }
+        try {
+            if (header != null && header.startsWith("Bearer ")) {
+                String token = header.substring(7);
+                try {
+                    if (jwtService.isTokenValid(token)) {
+                        String phone = jwtService.extractPhone(token);
+                        UsernamePasswordAuthenticationToken auth =
+                                new UsernamePasswordAuthenticationToken(phone, null, List.of());
+                        SecurityContextHolder.getContext().setAuthentication(auth);
 
-        filterChain.doFilter(request, response);
+                        User user = userRepository.findByPhoneNumberWithAssociations(phone).orElse(null);
+                        if (user != null) {
+                            LoggedUser.setCurrent(user);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.debug("JWT validation failed for request {}: {}", request.getRequestURI(), e.getMessage());
+                    SecurityContextHolder.clearContext();
+                }
+            }
+
+            filterChain.doFilter(request, response);
+        } finally {
+            LoggedUser.clearCurrent();
+        }
     }
 }

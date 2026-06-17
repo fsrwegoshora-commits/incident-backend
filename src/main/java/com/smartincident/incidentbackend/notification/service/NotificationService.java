@@ -3,6 +3,7 @@ package com.smartincident.incidentbackend.notification.service;
 import org.springframework.beans.factory.annotation.Value;
 import com.smartincident.incidentbackend.enums.NotificationChannel;
 import com.smartincident.incidentbackend.enums.NotificationType;
+import com.smartincident.incidentbackend.i18n.LocalizationService;
 import com.smartincident.incidentbackend.notification.dto.NotificationDto;
 import com.smartincident.incidentbackend.notification.dto.NotificationResponseDto;
 import com.smartincident.incidentbackend.notification.entity.Notification;
@@ -31,6 +32,7 @@ public class NotificationService {
     private final UserRepository userRepository;
     private final PushNotificationService pushNotificationService;
     private final DeviceTokenService deviceTokenService;
+    private final LocalizationService localizationService;
 
     // Add WebSocket or Server-Sent Events support
     private final SimpMessagingTemplate simpMessagingTemplate;
@@ -250,6 +252,79 @@ public class NotificationService {
         }
     }
 
+    /**
+     * Send a notification whose title and body are resolved from i18n message keys.
+     * Each recipient receives the notification in their own preferred language.
+     *
+     * @param titleKey  e.g. "notification.incident.resolved.title"
+     * @param bodyKey   e.g. "notification.incident.resolved.message"
+     * @param type      NotificationType for routing/storage
+     * @param entityUid related entity UID (incident, shift, …)
+     * @param entityType entity type string
+     * @param channels  channels to use (IN_APP + PUSH)
+     * @param bodyArgs  positional args for the body message pattern
+     * @param targetUserUids target recipients
+     */
+    @Transactional
+    public ResponseList<Notification> sendLocalizedNotification(
+            String titleKey, String bodyKey,
+            NotificationType type, String entityUid, String entityType,
+            List<NotificationChannel> channels,
+            Object[] bodyArgs,
+            List<String> targetUserUids) {
+
+        if (targetUserUids == null || targetUserUids.isEmpty())
+            return ResponseList.error("Target users are required");
+
+        List<Notification> sent = new ArrayList<>();
+        try {
+            for (String userUid : targetUserUids) {
+                Optional<User> userOpt = userRepository.findByUid(userUid);
+                if (userOpt.isEmpty()) continue;
+
+                User user = userOpt.get();
+                String lang = user.getPreferredLanguage() != null ? user.getPreferredLanguage() : "en";
+
+                String title   = localizationService.msgForLang(titleKey, lang);
+                String body    = localizationService.msgForLang(bodyKey, lang, bodyArgs);
+
+                Notification notification = new Notification();
+                notification.setUser(user);
+                notification.setTitle(title);
+                notification.setMessage(body);
+                notification.setType(type);
+                notification.setRelatedEntityUid(entityUid);
+                notification.setRelatedEntityType(entityType);
+                notification.setSentAt(java.time.LocalDateTime.now());
+
+                List<NotificationChannel> activeChannels = new ArrayList<>();
+                activeChannels.add(NotificationChannel.IN_APP);
+
+                if (pushEnabled && channels != null && channels.contains(NotificationChannel.PUSH)) {
+                    NotificationDto pushDto = new NotificationDto();
+                    pushDto.setTitle(title);
+                    pushDto.setMessage(body);
+                    pushDto.setType(type);
+                    pushDto.setRelatedEntityUid(entityUid);
+                    pushDto.setRelatedEntityType(entityType);
+                    pushDto.setChannels(channels);
+                    if (sendPushNotificationToUser(user, pushDto)) activeChannels.add(NotificationChannel.PUSH);
+                }
+
+                notification.setChannels(activeChannels);
+                notification.setSentSuccessfully(true);
+
+                Notification saved = notificationRepository.save(notification);
+                sent.add(saved);
+                broadcastNotificationToUser(userUid, saved);
+            }
+            return new ResponseList<>(sent);
+        } catch (Exception e) {
+            log.error("Failed to send localized notification: {}", e.getMessage(), e);
+            return ResponseList.error("Failed to send notification: " + e.getMessage());
+        }
+    }
+
     public ResponsePage<Notification> getUserNotifications(PageableParam pageableParam) {
         String userUid = LoggedUser.getUid();
         if (userUid == null) {
@@ -314,10 +389,11 @@ public class NotificationService {
         return Response.success(count);
     }
 
-    public ResponseList<Notification> clearNotifications(String userUid) {
+    public ResponseList<Notification> clearNotifications() {
 
+        String userUid = LoggedUser.getUid();
         if (userUid == null)
-            return new ResponseList<>("Id is required");
+            return new ResponseList<>("User not authenticated");
 
         Optional<User> oUser = userRepository.findByUid(userUid);
         if (!oUser.isPresent())
@@ -350,10 +426,11 @@ public class NotificationService {
         return new ResponseList<>(toDelete);
     }
 
-    public ResponseList<Notification> markAllRead(String userUid) {
+    public ResponseList<Notification> markAllRead() {
 
+        String userUid = LoggedUser.getUid();
         if (userUid == null)
-            return new ResponseList<>("Id is required");
+            return new ResponseList<>("User not authenticated");
 
         Optional<User> oUser = userRepository.findByUid(userUid);
         if (!oUser.isPresent())
@@ -366,7 +443,7 @@ public class NotificationService {
         List<Notification> notifications = notificationRepository.getNotReadByUserUid(userUid);
 
         if (notifications.isEmpty())
-            return new ResponseList<>("NO notification to mark read");
+            return new ResponseList<>(new ArrayList<>());
 
         List<Notification> toRead = new ArrayList<>();
 

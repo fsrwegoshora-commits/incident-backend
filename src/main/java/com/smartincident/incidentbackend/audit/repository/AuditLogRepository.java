@@ -13,19 +13,31 @@ import java.time.LocalDateTime;
 @Repository
 public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
 
-    @Query("SELECT a FROM AuditLog a " +
-           "WHERE (:actorUid IS NULL OR a.actorUid = :actorUid) " +
-           "AND (:action IS NULL OR a.action = :action) " +
-           "AND (:entityType IS NULL OR a.entityType = :entityType) " +
-           "AND (:from IS NULL OR a.timestamp >= :from) " +
-           "AND (:to IS NULL OR a.timestamp <= :to) " +
-           "AND (:key IS NULL OR LOWER(a.description) LIKE LOWER(CONCAT('%', :key, '%')) " +
-           "     OR LOWER(a.endpoint) LIKE LOWER(CONCAT('%', :key, '%'))) " +
-           "ORDER BY a.timestamp DESC")
+    @Query(value = "SELECT * FROM audit_logs " +
+           "WHERE (:actorUid IS NULL OR actor_uid = :actorUid) " +
+           "AND (:action IS NULL OR action = :action) " +
+           "AND (:entityType IS NULL OR entity_type = :entityType) " +
+           "AND (:category IS NULL OR category = :category) " +
+           "AND (CAST(:from AS TIMESTAMP) IS NULL OR timestamp >= :from) " +
+           "AND (CAST(:to AS TIMESTAMP) IS NULL OR timestamp <= :to) " +
+           "AND (:key IS NULL OR description ILIKE '%' || :key || '%' " +
+           "     OR endpoint ILIKE '%' || :key || '%') " +
+           "ORDER BY timestamp DESC",
+           countQuery = "SELECT COUNT(*) FROM audit_logs " +
+           "WHERE (:actorUid IS NULL OR actor_uid = :actorUid) " +
+           "AND (:action IS NULL OR action = :action) " +
+           "AND (:entityType IS NULL OR entity_type = :entityType) " +
+           "AND (:category IS NULL OR category = :category) " +
+           "AND (CAST(:from AS TIMESTAMP) IS NULL OR timestamp >= :from) " +
+           "AND (CAST(:to AS TIMESTAMP) IS NULL OR timestamp <= :to) " +
+           "AND (:key IS NULL OR description ILIKE '%' || :key || '%' " +
+           "     OR endpoint ILIKE '%' || :key || '%')",
+           nativeQuery = true)
     Page<AuditLog> findFiltered(
             @Param("actorUid") String actorUid,
             @Param("action") String action,
             @Param("entityType") String entityType,
+            @Param("category") String category,
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to,
             @Param("key") String key,

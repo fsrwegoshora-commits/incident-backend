@@ -5,6 +5,7 @@ import com.smartincident.incidentbackend.entity.BaseEntity;
 import com.smartincident.incidentbackend.enums.StationLevel;
 import com.smartincident.incidentbackend.enums.StationServiceType;
 import com.smartincident.incidentbackend.setting.entity.AdministrativeArea;
+import com.smartincident.incidentbackend.setting.entity.Agency;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -30,6 +31,11 @@ public class PoliceStation extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "service_type", nullable = false)
     private StationServiceType serviceType = StationServiceType.POLICE;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "agency_id")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    private Agency agency;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_station_id")

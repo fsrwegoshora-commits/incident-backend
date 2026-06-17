@@ -30,35 +30,40 @@ public class PoliceStationController {
     private final PoliceStationRepository policeStationRepository;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.AGENCY_ADMIN, Role.ROOT})
     @PostMapping
     public Response<PoliceStation> savePoliceStation(@RequestBody PoliceStationDto policeStationDto) {
         return policeStationService.savePoliceStation(policeStationDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT,
+                     Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.DISPATCHER})
     @GetMapping("/{uid}")
     public Response<PoliceStation> getPoliceStation(@PathVariable String uid) {
         return policeStationService.getPoliceStation(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.ROOT})
+    @AuthorizedRole({Role.ROOT, Role.AGENCY_ADMIN})
     @DeleteMapping("/{uid}")
     public Response<PoliceStation> deletePoliceStation(@PathVariable String uid) {
         return policeStationService.deletePoliceStation(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT,
+                     Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.DISPATCHER})
     @GetMapping
-    public ResponsePage<PoliceStation> getPoliceStations(@ModelAttribute PageableParam pageableParam) {
-        return policeStationService.getPoliceStations(pageableParam != null ? pageableParam : new PageableParam());
+    public ResponsePage<PoliceStation> getPoliceStations(
+            @ModelAttribute PageableParam pageableParam,
+            @RequestParam(required = false) String agencyUid) {
+        return policeStationService.getPoliceStations(
+            pageableParam != null ? pageableParam : new PageableParam(), agencyUid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
     @GetMapping("/admin")
     public ResponseList<PoliceStationDto> getStationsByAdmin() {
         String phone = jwtAuthInterceptor.extractPhoneFromRequest();

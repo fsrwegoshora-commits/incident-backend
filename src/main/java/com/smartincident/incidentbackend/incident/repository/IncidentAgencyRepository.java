@@ -42,6 +42,9 @@ public interface IncidentAgencyRepository extends JpaRepository<IncidentAgency, 
             @Param("incidentUid") String incidentUid,
             @Param("agencyUid") String agencyUid);
 
+    @Query("SELECT ia FROM IncidentAgency ia WHERE ia.incident.uid = :incidentUid")
+    List<IncidentAgency> findByIncidentUid(@Param("incidentUid") String incidentUid);
+
     // Get all pending notifications for an agency
     Page<IncidentAgency> findByAgencyAndResponseStatus(
             Agency agency,

@@ -3,6 +3,7 @@ package com.smartincident.incidentbackend.police.entity;
 import com.smartincident.incidentbackend.entity.BaseEntity;
 import com.smartincident.incidentbackend.enums.ShiftDutyType;
 import com.smartincident.incidentbackend.enums.ShiftTime;
+import com.smartincident.incidentbackend.operational.entity.OperationalPost;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -56,4 +57,9 @@ public class OfficerShift extends BaseEntity {
     @ManyToOne
     @JoinColumn(name = "checkpoint_id")
     private TrafficCheckpoint checkpoint;
+
+    /** Operational post where this officer is deployed. Takes precedence over checkpoint for routing. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "operational_post_id")
+    private OperationalPost operationalPost;
 }

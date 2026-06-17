@@ -1,10 +1,13 @@
 package com.smartincident.incidentbackend.analytics.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
+import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
 import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
-import com.smartincident.incidentbackend.enums.IncidentStatus;
-import com.smartincident.incidentbackend.enums.Permission;
+import com.smartincident.incidentbackend.emergency.entity.EmergencyVehicle;
+import com.smartincident.incidentbackend.emergency.repository.EmergencyVehicleRepository;
+import com.smartincident.incidentbackend.enums.*;
 import com.smartincident.incidentbackend.incident.repository.IncidentReportRepository;
+import com.smartincident.incidentbackend.setting.repository.AgencyRepository;
 import com.smartincident.incidentbackend.utils.LoggedUser;
 import com.smartincident.incidentbackend.utils.Response;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +23,8 @@ import java.util.*;
 public class AnalyticsController {
 
     private final IncidentReportRepository incidentRepo;
+    private final EmergencyVehicleRepository vehicleRepo;
+    private final AgencyRepository agencyRepo;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
@@ -139,6 +144,168 @@ public class AnalyticsController {
         result.put("escalatedCount",       incidentRepo.countEscalated(agencyUid));
         result.put("totalDispatched",      (long) dispatched.size());
 
+        return Response.success(result);
+    }
+
+    // ── Vehicle Intelligence (Improvement 2) ─────────────────────────────────
+
+    /**
+     * Fleet status overview — vehicle counts by status and type.
+     * Useful for resource readiness assessment.
+     */
+    @Authenticated
+    @RequiresPermission(Permission.VIEW_ANALYTICS)
+    @GetMapping("/vehicles")
+    public Response<Map<String, Object>> getVehicleIntelligence(
+            @RequestParam(required = false) String agencyUid) {
+
+        String scopedAgencyUid = LoggedUser.isRoot() ? agencyUid : LoggedUser.getAgencyUid();
+
+        List<EmergencyVehicle> vehicles = vehicleRepo.findAll().stream()
+                .filter(v -> Boolean.TRUE.equals(v.getIsActive()))
+                .filter(v -> scopedAgencyUid == null
+                        || (v.getEmergencyUnit() != null
+                            && v.getEmergencyUnit().getAgency() != null
+                            && scopedAgencyUid.equals(v.getEmergencyUnit().getAgency().getUid())))
+                .toList();
+
+        Map<String, Long> byStatus = new LinkedHashMap<>();
+        for (VehicleStatus s : VehicleStatus.values()) {
+            long count = vehicles.stream().filter(v -> v.getStatus() == s).count();
+            if (count > 0) byStatus.put(s.name(), count);
+        }
+
+        Map<String, Long> byType = new LinkedHashMap<>();
+        for (VehicleType t : VehicleType.values()) {
+            long count = vehicles.stream().filter(v -> v.getVehicleType() == t).count();
+            if (count > 0) byType.put(t.name(), count);
+        }
+
+        long withGps = vehicles.stream()
+                .filter(v -> v.getLatitude() != null && v.getLongitude() != null).count();
+
+        List<Map<String, Object>> details = vehicles.stream()
+                .map(v -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("uid", v.getUid());
+                    m.put("plateNumber", v.getPlateNumber());
+                    m.put("model", v.getModel());
+                    m.put("vehicleType", v.getVehicleType() != null ? v.getVehicleType().name() : null);
+                    m.put("status", v.getStatus().name());
+                    m.put("unitName", v.getEmergencyUnit() != null ? v.getEmergencyUnit().getName() : null);
+                    m.put("agencyType", v.getEmergencyUnit() != null && v.getEmergencyUnit().getAgency() != null
+                            ? v.getEmergencyUnit().getAgency().getAgencyType() : null);
+                    m.put("hasGps", v.getLatitude() != null);
+                    m.put("latitude", v.getLatitude());
+                    m.put("longitude", v.getLongitude());
+                    m.put("lastLocationUpdate", v.getLastLocationUpdate());
+                    m.put("hasAls", v.getHasAdvancedLifeSupport());
+                    return m;
+                })
+                .toList();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("total", (long) vehicles.size());
+        result.put("withGpsTracking", withGps);
+        result.put("byStatus", byStatus);
+        result.put("byType", byType);
+        result.put("vehicles", details);
+        return Response.success(result);
+    }
+
+    // ── National Operational Intelligence (Improvement 8) ─────────────────────
+
+    /**
+     * Nationwide analytics — response time trends, agency performance comparison,
+     * incident type distribution. ROOT only.
+     */
+    @Authenticated
+    @AuthorizedRole({Role.ROOT, Role.AGENCY_ADMIN})
+    @RequiresPermission(Permission.VIEW_ANALYTICS)
+    @GetMapping("/national")
+    public Response<Map<String, Object>> getNationalAnalytics(
+            @RequestParam(defaultValue = "30") int days) {
+
+        if (days < 1 || days > 365) days = 30;
+        LocalDateTime since = LocalDateTime.now().minusDays(days);
+
+        // All incidents in the window
+        List<com.smartincident.incidentbackend.incident.entity.IncidentReport> all =
+                incidentRepo.findAll().stream()
+                        .filter(i -> Boolean.TRUE.equals(i.getIsActive())
+                                && i.getReportedAt() != null && i.getReportedAt().isAfter(since))
+                        .toList();
+
+        // Response time stats
+        OptionalDouble avgDispatch = all.stream()
+                .filter(i -> i.getReportedAt() != null && i.getDispatchedAt() != null)
+                .mapToLong(i -> java.time.Duration.between(i.getReportedAt(), i.getDispatchedAt()).toMinutes())
+                .filter(m -> m >= 0).average();
+
+        OptionalDouble avgAtScene = all.stream()
+                .filter(i -> i.getDispatchedAt() != null && i.getAtSceneAt() != null)
+                .mapToLong(i -> java.time.Duration.between(i.getDispatchedAt(), i.getAtSceneAt()).toMinutes())
+                .filter(m -> m >= 0).average();
+
+        OptionalDouble avgResolution = all.stream()
+                .filter(i -> i.getDispatchedAt() != null && i.getResolvedAt() != null)
+                .mapToLong(i -> java.time.Duration.between(i.getDispatchedAt(), i.getResolvedAt()).toMinutes())
+                .filter(m -> m >= 0).average();
+
+        // SLA compliance
+        long totalSla = all.stream().filter(i -> i.getSlaDeadline() != null).count();
+        long breached  = all.stream().filter(i -> i.getSlaBreachedAt() != null).count();
+        double slaCompliancePct = totalSla > 0 ? (double)(totalSla - breached) / totalSla * 100 : 100.0;
+
+        // Per-agency performance
+        List<Map<String, Object>> agencyPerf = agencyRepo.findAll().stream()
+                .map(agency -> {
+                    List<com.smartincident.incidentbackend.incident.entity.IncidentReport> aAll = all.stream()
+                            .filter(i -> i.getLeadAgency() != null && agency.getUid().equals(i.getLeadAgency().getUid()))
+                            .toList();
+                    if (aAll.isEmpty()) return null;
+
+                    OptionalDouble aAvgDispatch = aAll.stream()
+                            .filter(i -> i.getReportedAt() != null && i.getDispatchedAt() != null)
+                            .mapToLong(i -> java.time.Duration.between(i.getReportedAt(), i.getDispatchedAt()).toMinutes())
+                            .filter(m -> m >= 0).average();
+
+                    long aBreached = aAll.stream().filter(i -> i.getSlaBreachedAt() != null).count();
+                    long aTotal    = aAll.stream().filter(i -> i.getSlaDeadline() != null).count();
+
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("agencyUid",  agency.getUid());
+                    m.put("agencyName", agency.getName());
+                    m.put("agencyType", agency.getAgencyType());
+                    m.put("totalIncidents", (long) aAll.size());
+                    m.put("resolved",  aAll.stream().filter(i -> i.getStatus() == IncidentStatus.RESOLVED || i.getStatus() == IncidentStatus.CLOSED).count());
+                    m.put("avgDispatchMinutes", aAvgDispatch.isPresent() ? Math.round(aAvgDispatch.getAsDouble()) : null);
+                    m.put("slaBreached", aBreached);
+                    m.put("slaCompliancePct", aTotal > 0 ? Math.round((double)(aTotal - aBreached) / aTotal * 1000) / 10.0 : 100.0);
+                    return m;
+                })
+                .filter(Objects::nonNull)
+                .toList();
+
+        // Daily trend
+        List<Map<String, Object>> trend = new ArrayList<>();
+        for (Object[] row : incidentRepo.countGroupedByDay(since, null)) {
+            Map<String, Object> point = new LinkedHashMap<>();
+            point.put("date",  row[0].toString());
+            point.put("count", ((Number) row[1]).longValue());
+            trend.add(point);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("days", days);
+        result.put("totalIncidents", (long) all.size());
+        result.put("avgDispatchMinutes",   avgDispatch.isPresent()   ? Math.round(avgDispatch.getAsDouble())   : null);
+        result.put("avgAtSceneMinutes",    avgAtScene.isPresent()    ? Math.round(avgAtScene.getAsDouble())    : null);
+        result.put("avgResolutionMinutes", avgResolution.isPresent() ? Math.round(avgResolution.getAsDouble()) : null);
+        result.put("slaCompliancePct", Math.round(slaCompliancePct * 10) / 10.0);
+        result.put("slaBreached", breached);
+        result.put("agencyPerformance", agencyPerf);
+        result.put("dailyTrend", trend);
         return Response.success(result);
     }
 

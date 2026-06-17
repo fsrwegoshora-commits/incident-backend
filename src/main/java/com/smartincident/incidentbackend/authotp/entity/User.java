@@ -71,6 +71,10 @@ public class User extends BaseEntity {
     @Column(name = "dispatcher_appointment")
     private DispatcherAppointment appointment;
 
+    /** ISO 639-1 language code for UI and notifications: "en" (English) or "sw" (Swahili). Defaults to English. */
+    @Column(name = "preferred_language", length = 10)
+    private String preferredLanguage = "en";
+
     @Override
     public String toString() {
         return "User{" +

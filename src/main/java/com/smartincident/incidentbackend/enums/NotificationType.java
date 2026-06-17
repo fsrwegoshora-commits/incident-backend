@@ -11,5 +11,6 @@ public enum NotificationType {
     SYSTEM_ALERT,
     EMERGENCY,
     INFORMATION,
-    SUPERVISOR_ALERT
+    SUPERVISOR_ALERT,
+    INCIDENT_UPDATE
 }

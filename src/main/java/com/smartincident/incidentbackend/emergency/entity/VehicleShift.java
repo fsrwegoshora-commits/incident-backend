@@ -3,8 +3,10 @@ package com.smartincident.incidentbackend.emergency.entity;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.smartincident.incidentbackend.entity.BaseEntity;
 import com.smartincident.incidentbackend.enums.ShiftTime;
+import com.smartincident.incidentbackend.fire.entity.FireOfficer;
 import com.smartincident.incidentbackend.medical.entity.Hospital;
 import com.smartincident.incidentbackend.medical.entity.Medic;
+import com.smartincident.incidentbackend.operational.entity.OperationalPost;
 import com.smartincident.incidentbackend.police.entity.PoliceOfficer;
 import com.smartincident.incidentbackend.police.entity.TrafficCheckpoint;
 import jakarta.persistence.*;
@@ -54,10 +56,41 @@ public class VehicleShift extends BaseEntity {
     @Builder.Default
     private List<PoliceOfficer> crew = new ArrayList<>();
 
-    /** Standby post for police/fire shifts (TrafficCheckpoint or similar). */
+    /** Standby post for police shifts (TrafficCheckpoint). */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "standby_location_id")
     private TrafficCheckpoint standbyLocation;
+
+    // ── Fire vehicle crew ──────────────────────────────────────────────────
+
+    @ManyToMany
+    @JoinTable(
+        name = "vehicle_shift_fire_crew",
+        joinColumns = @JoinColumn(name = "shift_id"),
+        inverseJoinColumns = @JoinColumn(name = "fire_officer_id")
+    )
+    @Builder.Default
+    @JsonIgnoreProperties({"emergencyUnit", "userAccount", "hibernateLazyInitializer"})
+    private List<FireOfficer> fireCrew = new ArrayList<>();
+
+    /** Crew commander responsible for this fire vehicle shift. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "fire_crew_commander_id")
+    @JsonIgnoreProperties({"emergencyUnit", "userAccount", "hibernateLazyInitializer"})
+    private FireOfficer fireCrewCommander;
+
+    /** Driver of the fire vehicle for this shift. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "fire_crew_driver_id")
+    @JsonIgnoreProperties({"emergencyUnit", "userAccount", "hibernateLazyInitializer"})
+    private FireOfficer fireCrewDriver;
+
+    // ── Operational post deployment ────────────────────────────────────────
+
+    /** Operational post where this vehicle/crew is deployed during this shift. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "operational_post_id")
+    private OperationalPost operationalPost;
 
     // ── Ambulance-specific crew ────────────────────────────────────────────
 

@@ -11,7 +11,22 @@ import com.smartincident.incidentbackend.police.repository.PoliceOfficerReposito
 
 public class LoggedUser {
 
+    /** Resolved once per request by JwtAuthFilter and cleared at the end of the request. */
+    private static final ThreadLocal<User> CURRENT_USER = new ThreadLocal<>();
+
+    /** Called by JwtAuthFilter right after token validation so get() doesn't re-resolve on every call. */
+    public static void setCurrent(User user) {
+        CURRENT_USER.set(user);
+    }
+
+    /** Called by JwtAuthFilter in a finally block to avoid leaking between requests on the same thread. */
+    public static void clearCurrent() {
+        CURRENT_USER.remove();
+    }
+
     public static User get() {
+        User cached = CURRENT_USER.get();
+        if (cached != null) return cached;
         try {
             JwtAuthInterceptor jwtAuthInterceptor = SpringContext.getBean(JwtAuthInterceptor.class);
             UserService userService = SpringContext.getBean(UserService.class);
@@ -78,6 +93,13 @@ public class LoggedUser {
 
     public static boolean isDispatcher() {
         return getRole() == Role.DISPATCHER;
+    }
+
+    /** Returns the logged-in user's preferred language code ("en", "sw"). Defaults to "en". */
+    public static String getPreferredLanguage() {
+        User user = get();
+        if (user == null || user.getPreferredLanguage() == null) return "en";
+        return user.getPreferredLanguage();
     }
 
     public static boolean hasPermission(Permission permission) {

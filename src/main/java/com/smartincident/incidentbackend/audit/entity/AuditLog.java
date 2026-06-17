@@ -69,4 +69,16 @@ public class AuditLog {
     @Builder.Default
     @Column(nullable = false)
     private boolean success = true;
+
+    /** Previous value of changed field (for UPDATE/DELETE actions). */
+    @Column(name = "old_value", columnDefinition = "TEXT")
+    private String oldValue;
+
+    /** New value after the change (for CREATE/UPDATE actions). */
+    @Column(name = "new_value", columnDefinition = "TEXT")
+    private String newValue;
+
+    /** High-level audit category for filtering: AUTH, INCIDENT, USER, RESOURCE, CONFIG. */
+    @Column(name = "category", length = 30)
+    private String category;
 }
