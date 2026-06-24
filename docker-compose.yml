@@ -53,9 +53,9 @@ services:
       SPRING_DATASOURCE_URL:      jdbc:postgresql://postgres:5432/${DB_NAME:-sirs_db}
       SPRING_DATASOURCE_USERNAME: ${DB_USER:-sirs_user}
       SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-sirs_pass}
-      SPRING_REDIS_HOST:          redis
-      SPRING_REDIS_PORT:          6379
-      SPRING_REDIS_PASSWORD:      ${REDIS_PASSWORD:-redis_pass}
+      REDIS_HOST:                 redis
+      REDIS_PORT:                 6379
+      REDIS_PASSWORD:             ${REDIS_PASSWORD:-redis_pass}
       JWT_SECRET:                 ${JWT_SECRET:-change_me_in_production_32chars}
       APP_SEED_ROOT_PHONE:        ${ROOT_PHONE:-+255000000000}
       APP_SEED_ROOT_NAME:         ${ROOT_NAME:-System Administrator}

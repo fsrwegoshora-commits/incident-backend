@@ -133,6 +133,9 @@ public class OfficerShiftService {
         if (shiftOpt.isEmpty()) return Response.error("Shift not found");
 
         OfficerShift shift = shiftOpt.get();
+        if (isShiftCompleted(shift)) {
+            return Response.error("Cannot excuse a shift that has already completed");
+        }
         shift.setIsExcused(true);
         shift.setExcuseReason(reason);
         shift.update();
@@ -147,6 +150,18 @@ public class OfficerShiftService {
             log.error("Failed to excuse shift: {}", e.getMessage());
             return Response.error("Failed to excuse shift: " + Utils.getExceptionMessage(e));
         }
+    }
+
+    private boolean isShiftCompleted(OfficerShift shift) {
+        if (shift.getShiftDate() == null || shift.getStartTime() == null || shift.getEndTime() == null) {
+            return false;
+        }
+        java.time.LocalDateTime start = java.time.LocalDateTime.of(shift.getShiftDate(), shift.getStartTime());
+        java.time.LocalDateTime end = java.time.LocalDateTime.of(shift.getShiftDate(), shift.getEndTime());
+        if (!end.isAfter(start)) {
+            end = end.plusDays(1);
+        }
+        return java.time.LocalDateTime.now().isAfter(end);
     }
 
     public Response<OfficerShift> deleteOfficerShift(String uid) {

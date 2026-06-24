@@ -278,40 +278,83 @@ public class Initializer implements ApplicationRunner {
                 Permission.ESCALATE_INCIDENT, Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES,
                 Permission.VIEW_SLA_METRICS, Permission.MANAGE_AFTER_ACTION,
                 Permission.VIEW_DISPATCH_CENTER, Permission.ASSIGN_DISPATCHER,
-                Permission.MANAGE_SHIFTS));
+                Permission.MANAGE_SHIFTS, Permission.ASSIGN_OFFICER, Permission.VIEW_PENDING_INCIDENTS,
+                Permission.MANAGE_DISPATCH_QUEUE, Permission.VIEW_SLA_BREACHES, Permission.DESIGNATE_COMMANDER,
+                Permission.STATION_REVIEW_INCIDENT, Permission.SUBMIT_AAR, Permission.APPROVE_AAR,
+                Permission.TRANSFER_OFFICER, Permission.MANAGE_POLICE_STATION,
+                Permission.MANAGE_GEOFENCES, Permission.VIEW_LIVE_RESOURCES, Permission.VIEW_NATIONAL_ANALYTICS,
+                Permission.DISPATCH_AGENCY, Permission.SEND_CHAT_MESSAGE, Permission.MANAGE_CHAT_MESSAGES,
+                Permission.SUBMIT_AFTER_ACTION_REPORT, Permission.VIEW_AFTER_ACTION_REPORT,
+                Permission.MANAGE_AFTER_ACTION_REPORT));
         defaults.put(Role.DISPATCH_CENTER_ADMIN, EnumSet.of(
                 Permission.CREATE_USER, Permission.UPDATE_USER,
                 Permission.DISPATCH_INCIDENT, Permission.UPDATE_INCIDENT, Permission.CLOSE_INCIDENT,
                 Permission.ESCALATE_INCIDENT, Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES,
                 Permission.VIEW_ANALYTICS, Permission.VIEW_SLA_METRICS,
                 Permission.MANAGE_AFTER_ACTION, Permission.VIEW_DISPATCH_CENTER,
-                Permission.ASSIGN_DISPATCHER, Permission.MANAGE_SHIFTS));
+                Permission.ASSIGN_DISPATCHER, Permission.MANAGE_SHIFTS,
+                Permission.ASSIGN_OFFICER, Permission.MANAGE_DISPATCH_QUEUE, Permission.VIEW_SLA_BREACHES,
+                Permission.DESIGNATE_COMMANDER, Permission.DISPATCHER_REVIEW_INCIDENT, Permission.SUBMIT_AAR,
+                Permission.VIEW_CHECKPOINTS, Permission.MANAGE_GEOFENCES, Permission.VIEW_LIVE_RESOURCES,
+                Permission.ESCALATE_RESOURCE, Permission.SEND_CHAT_MESSAGE, Permission.MANAGE_CHAT_MESSAGES,
+                Permission.SUBMIT_AFTER_ACTION_REPORT, Permission.VIEW_AFTER_ACTION_REPORT,
+                Permission.MANAGE_AFTER_ACTION_REPORT, Permission.DISPATCH_UNITS));
         defaults.put(Role.DISPATCHER_SUPERVISOR, EnumSet.of(
                 Permission.DISPATCH_INCIDENT, Permission.UPDATE_INCIDENT, Permission.CLOSE_INCIDENT,
                 Permission.ESCALATE_INCIDENT, Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES,
                 Permission.VIEW_ANALYTICS, Permission.VIEW_SLA_METRICS,
                 Permission.MANAGE_AFTER_ACTION, Permission.VIEW_DISPATCH_CENTER,
-                Permission.MANAGE_SHIFTS));
+                Permission.MANAGE_SHIFTS, Permission.ASSIGN_OFFICER, Permission.MANAGE_DISPATCH_QUEUE,
+                Permission.VIEW_SLA_BREACHES, Permission.DESIGNATE_COMMANDER,
+                Permission.DISPATCHER_REVIEW_INCIDENT, Permission.SUBMIT_AAR, Permission.VIEW_CHECKPOINTS,
+                Permission.VIEW_LIVE_RESOURCES, Permission.ESCALATE_RESOURCE,
+                Permission.SEND_CHAT_MESSAGE, Permission.MANAGE_CHAT_MESSAGES,
+                Permission.SUBMIT_AFTER_ACTION_REPORT, Permission.VIEW_AFTER_ACTION_REPORT,
+                Permission.MANAGE_AFTER_ACTION_REPORT, Permission.DISPATCH_UNITS));
         defaults.put(Role.STATION_ADMIN, EnumSet.of(
                 Permission.CREATE_USER, Permission.UPDATE_USER,
                 Permission.MANAGE_VEHICLES, Permission.MANAGE_STATIONS, Permission.MANAGE_CHECKPOINTS,
                 Permission.VIEW_ANALYTICS, Permission.DISPATCH_INCIDENT,
                 Permission.UPDATE_INCIDENT, Permission.CLOSE_INCIDENT,
-                Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES, Permission.MANAGE_SHIFTS));
+                Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES, Permission.MANAGE_SHIFTS,
+                Permission.ASSIGN_OFFICER, Permission.VIEW_PENDING_INCIDENTS, Permission.VIEW_INVESTIGATION_QUEUE,
+                Permission.VIEW_OFFICER_INCIDENTS, Permission.STATION_REVIEW_INCIDENT, Permission.SUBMIT_AAR,
+                Permission.VIEW_AVAILABLE_OFFICERS, Permission.VIEW_STATION_APPOINTMENTS,
+                Permission.VIEW_OFFICER_APPOINTMENTS, Permission.VIEW_CHECKPOINTS, Permission.VIEW_NEARBY_STATIONS,
+                Permission.VIEW_LIVE_RESOURCES, Permission.ESCALATE_RESOURCE,
+                Permission.DISPATCH_AGENCY, Permission.SEND_CHAT_MESSAGE, Permission.MANAGE_CHAT_MESSAGES,
+                Permission.SUBMIT_AFTER_ACTION_REPORT, Permission.VIEW_AFTER_ACTION_REPORT,
+                Permission.MANAGE_OFFICER_SHIFTS, Permission.VIEW_OWN_OFFICER_SHIFT,
+                Permission.VIEW_OFFICER_ON_DUTY, Permission.VIEW_DEPARTMENTS));
         defaults.put(Role.DISPATCHER, EnumSet.of(
                 Permission.DISPATCH_INCIDENT, Permission.UPDATE_INCIDENT,
                 Permission.ESCALATE_INCIDENT, Permission.VIEW_RESPONDERS, Permission.VIEW_VEHICLES,
-                Permission.VIEW_SLA_METRICS, Permission.MANAGE_AFTER_ACTION));
+                Permission.VIEW_SLA_METRICS, Permission.MANAGE_AFTER_ACTION,
+                Permission.ASSIGN_OFFICER, Permission.VIEW_PENDING_INCIDENTS, Permission.MANAGE_DISPATCH_QUEUE,
+                Permission.VIEW_OFFICER_INCIDENTS, Permission.DISPATCHER_REVIEW_INCIDENT, Permission.VIEW_CHECKPOINTS,
+                Permission.VIEW_LIVE_RESOURCES, Permission.ESCALATE_RESOURCE,
+                Permission.DISPATCH_AGENCY, Permission.SEND_CHAT_MESSAGE,
+                Permission.SUBMIT_AFTER_ACTION_REPORT, Permission.VIEW_AFTER_ACTION_REPORT,
+                Permission.DISPATCH_UNITS));
         defaults.put(Role.POLICE_OFFICER, EnumSet.of(
                 Permission.CREATE_INCIDENT, Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE,
-                Permission.VIEW_VEHICLES, Permission.UPDATE_OWN_PROFILE));
+                Permission.VIEW_VEHICLES, Permission.UPDATE_OWN_PROFILE, Permission.VIEW_OFFICER_INCIDENTS,
+                Permission.VIEW_OFFICER_APPOINTMENTS, Permission.VIEW_NEARBY_STATIONS,
+                Permission.VIEW_LIVE_RESOURCES, Permission.SEND_CHAT_MESSAGE,
+                Permission.VIEW_OWN_OFFICER_SHIFT, Permission.VIEW_OFFICER_ON_DUTY));
+        defaults.put(Role.OPERATIONAL_POST_SUPERVISOR, EnumSet.of(
+                Permission.STATION_REVIEW_INCIDENT, Permission.ESCALATE_RESOURCE));
         defaults.put(Role.FIRE_OFFICER, EnumSet.of(
-                Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE, Permission.UPDATE_OWN_PROFILE));
+                Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE, Permission.UPDATE_OWN_PROFILE,
+                Permission.VIEW_LIVE_RESOURCES, Permission.SEND_CHAT_MESSAGE));
         defaults.put(Role.MEDIC, EnumSet.of(
-                Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE, Permission.UPDATE_OWN_PROFILE));
+                Permission.UPDATE_INCIDENT, Permission.UPLOAD_EVIDENCE, Permission.UPDATE_OWN_PROFILE,
+                Permission.VIEW_LIVE_RESOURCES, Permission.SEND_CHAT_MESSAGE));
         defaults.put(Role.CITIZEN, EnumSet.of(
                 Permission.CREATE_INCIDENT, Permission.UPLOAD_EVIDENCE,
-                Permission.VIEW_OWN_INCIDENTS, Permission.UPDATE_OWN_PROFILE));
+                Permission.VIEW_OWN_INCIDENTS, Permission.UPDATE_OWN_PROFILE,
+                Permission.DELETE_OWN_ACCOUNT, Permission.VIEW_NEARBY_STATIONS,
+                Permission.VIEW_OFFICER_ON_DUTY));
 
         for (Map.Entry<Role, Set<Permission>> entry : defaults.entrySet()) {
             String roleName = entry.getKey().name();

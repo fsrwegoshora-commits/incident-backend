@@ -1,9 +1,9 @@
 package com.smartincident.incidentbackend.incident.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.enums.CorrelationType;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.incident.entity.IncidentCorrelation;
 import com.smartincident.incidentbackend.incident.entity.IncidentReport;
 import com.smartincident.incidentbackend.incident.repository.IncidentCorrelationRepository;
@@ -31,8 +31,7 @@ public class IncidentCorrelationController {
      * Returns all DUPLICATE and RELATED correlations for an incident (either side).
      */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/{uid}/correlations")
     public ResponseList<IncidentCorrelation> getCorrelations(@PathVariable String uid) {
         List<IncidentCorrelation> list = correlationRepository.findAllByIncidentUid(uid);
@@ -44,8 +43,7 @@ public class IncidentCorrelationController {
      * Returns a summary list of users who filed duplicate reports for the same incident.
      */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/{uid}/co-reporters")
     public Response<Map<String, Object>> getCoReporters(@PathVariable String uid) {
         return incidentRepository.findByUid(uid)
@@ -79,8 +77,7 @@ public class IncidentCorrelationController {
      * }
      */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_DISPATCH_QUEUE)
     @PostMapping("/{masterUid}/correlations/link/{linkedUid}")
     public Response<IncidentCorrelation> manualLink(
             @PathVariable String masterUid,
@@ -108,8 +105,7 @@ public class IncidentCorrelationController {
      * Quick summary for dispatcher dashboard badges.
      */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/{uid}/correlations/count")
     public Response<Map<String, Long>> getCorrelationCount(@PathVariable String uid) {
         long duplicates = correlationRepository.countDuplicatesByMaster(uid);

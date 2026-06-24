@@ -1,8 +1,8 @@
 package com.smartincident.incidentbackend.incident.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.incident.dto.MultiAgencyDashboardDto;
 import com.smartincident.incidentbackend.incident.service.MultiAgencyDashboardService;
 import com.smartincident.incidentbackend.utils.Response;
@@ -19,7 +19,7 @@ public class MultiAgencyDashboardController {
 
     /** Summary metrics across all agencies and active incidents. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_DISPATCH_CENTER)
     @GetMapping("/summary")
     public Response<MultiAgencyDashboardDto.DashboardSummary> getSummary() {
         return dashboardService.getDashboardSummary();
@@ -27,8 +27,7 @@ public class MultiAgencyDashboardController {
 
     /** List of all active incidents requiring multi-agency coordination. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_SLA_METRICS)
     @GetMapping("/incidents")
     public ResponseList<MultiAgencyDashboardDto> getActiveMultiAgencyIncidents() {
         return dashboardService.getActiveMultiAgencyIncidents();
@@ -36,8 +35,7 @@ public class MultiAgencyDashboardController {
 
     /** Coordination detail for a single incident — all agency statuses. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.AGENCY_ADMIN, Role.ROOT, Role.STATION_ADMIN})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/incidents/{incidentUid}")
     public Response<MultiAgencyDashboardDto> getIncidentCoordination(@PathVariable String incidentUid) {
         return dashboardService.getIncidentCoordination(incidentUid);

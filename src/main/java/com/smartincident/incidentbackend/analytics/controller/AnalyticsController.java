@@ -1,7 +1,6 @@
 package com.smartincident.incidentbackend.analytics.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
 import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.emergency.entity.EmergencyVehicle;
 import com.smartincident.incidentbackend.emergency.repository.EmergencyVehicleRepository;
@@ -220,8 +219,7 @@ public class AnalyticsController {
      * incident type distribution. ROOT only.
      */
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.AGENCY_ADMIN})
-    @RequiresPermission(Permission.VIEW_ANALYTICS)
+    @RequiresPermission(Permission.VIEW_NATIONAL_ANALYTICS)
     @GetMapping("/national")
     public Response<Map<String, Object>> getNationalAnalytics(
             @RequestParam(defaultValue = "30") int days) {

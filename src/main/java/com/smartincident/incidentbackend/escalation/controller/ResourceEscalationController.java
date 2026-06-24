@@ -1,9 +1,9 @@
 package com.smartincident.incidentbackend.escalation.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.enums.ResourceEscalationStatus;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.escalation.dto.ResourceEscalationDto;
 import com.smartincident.incidentbackend.escalation.service.ResourceEscalationService;
 import com.smartincident.incidentbackend.utils.Response;
@@ -22,8 +22,7 @@ public class ResourceEscalationController {
 
     /** Dispatcher / Post Supervisor escalates when no resources are available. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.OPERATIONAL_POST_SUPERVISOR, Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.ESCALATE_RESOURCE)
     @PostMapping
     public Response<?> escalate(@RequestBody ResourceEscalationDto dto) {
         return service.escalate(dto);
@@ -31,7 +30,7 @@ public class ResourceEscalationController {
 
     /** Station Admin / Agency Admin / ROOT responds to a pending escalation. */
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @PutMapping("/{uid}/respond")
     public Response<?> respond(
             @PathVariable String uid,
@@ -50,7 +49,7 @@ public class ResourceEscalationController {
 
     /** Get all pending escalations — for Station Admin / Agency Admin. */
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @GetMapping("/pending")
     public ResponseList<?> getPending() {
         return service.getPending();

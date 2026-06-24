@@ -4,8 +4,8 @@ import com.smartincident.incidentbackend.incident.dto.ChatMessageDto;
 import com.smartincident.incidentbackend.incident.entity.ChatMessage;
 import com.smartincident.incidentbackend.incident.service.ChatMessageService;
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.utils.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,9 +21,7 @@ public class ChatMessageController {
 
     /** Send a message on an incident channel. Open to all operational roles — Dispatchers, Officers, and Station Admins. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.POLICE_OFFICER, Role.FIRE_OFFICER, Role.MEDIC,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.SEND_CHAT_MESSAGE)
     @PostMapping
     public Response<ChatMessage> sendMessage(@RequestBody ChatMessageDto dto) {
         log.info("Sending chat message for incident: {}", dto.getIncidentUid());
@@ -38,7 +36,7 @@ public class ChatMessageController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_CHAT_MESSAGES)
     @PostMapping("/system")
     public Response<ChatMessage> sendSystemMessage(@RequestParam String incidentUid, @RequestParam String message) {
         log.info("Sending system message");

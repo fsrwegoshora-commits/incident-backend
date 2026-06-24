@@ -3,7 +3,7 @@ package com.smartincident.incidentbackend.dispatcher.controller;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.dispatcher.dto.DispatchCenterPerformanceDto;
 import com.smartincident.incidentbackend.dispatcher.dto.DispatcherShiftDto;
 import com.smartincident.incidentbackend.dispatcher.entity.DispatcherShift;
@@ -13,6 +13,7 @@ import com.smartincident.incidentbackend.emergency.dto.EmergencyUnitDto;
 import com.smartincident.incidentbackend.emergency.entity.EmergencyUnit;
 import com.smartincident.incidentbackend.emergency.service.EmergencyUnitService;
 import com.smartincident.incidentbackend.enums.IncidentStatus;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.enums.UnitType;
 import com.smartincident.incidentbackend.incident.repository.IncidentReportRepository;
@@ -40,7 +41,7 @@ public class DispatchCenterController {
 
     /** Create or update a Dispatch Center. ROOT / AGENCY_ADMIN only. */
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.AGENCY_ADMIN})
+    @RequiresPermission(Permission.MANAGE_AGENCY)
     @PostMapping
     public Response<EmergencyUnit> save(@RequestBody EmergencyUnitDto dto) {
         log.info("Saving dispatch center: {}", dto.getName());
@@ -66,7 +67,7 @@ public class DispatchCenterController {
 
     /** List all Dispatcher users belonging to a Dispatch Center. */
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.AGENCY_ADMIN, Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR})
+    @RequiresPermission(Permission.VIEW_DISPATCH_CENTER)
     @GetMapping("/{uid}/dispatchers")
     public ResponseList<User> getDispatchers(@PathVariable String uid) {
         log.info("Fetching dispatchers for center: {}", uid);
@@ -77,7 +78,7 @@ public class DispatchCenterController {
 
     /** List all shifts for dispatchers in a Dispatch Center. */
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.AGENCY_ADMIN, Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR})
+    @RequiresPermission(Permission.VIEW_DISPATCH_CENTER)
     @GetMapping("/{uid}/shifts")
     public ResponseList<DispatcherShift> getShifts(@PathVariable String uid) {
         log.info("Fetching dispatcher shifts for center: {}", uid);
@@ -86,7 +87,7 @@ public class DispatchCenterController {
 
     /** Create a dispatcher shift — available to DISPATCH_CENTER_ADMIN and above. */
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.AGENCY_ADMIN, Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR})
+    @RequiresPermission(Permission.VIEW_DISPATCH_CENTER)
     @PostMapping("/{uid}/shifts")
     public Response<DispatcherShift> createShift(@PathVariable String uid,
                                                   @RequestBody DispatcherShiftDto dto) {
@@ -96,7 +97,7 @@ public class DispatchCenterController {
 
     /** List all supervisors (DISPATCHER_SUPERVISOR role) in a Dispatch Center. */
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.AGENCY_ADMIN, Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR})
+    @RequiresPermission(Permission.VIEW_DISPATCH_CENTER)
     @GetMapping("/{uid}/supervisors")
     public ResponseList<User> getSupervisors(@PathVariable String uid) {
         log.info("Fetching supervisors for center: {}", uid);
@@ -107,7 +108,7 @@ public class DispatchCenterController {
 
     /** Performance metrics for a Dispatch Center. */
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.AGENCY_ADMIN, Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR})
+    @RequiresPermission(Permission.VIEW_DISPATCH_CENTER)
     @GetMapping("/{uid}/performance")
     public Response<DispatchCenterPerformanceDto> getPerformance(@PathVariable String uid) {
         log.info("Fetching performance for center: {}", uid);
@@ -188,7 +189,7 @@ public class DispatchCenterController {
 
     /** Delete (soft-delete) a Dispatch Center. ROOT only. */
     @Authenticated
-    @AuthorizedRole({Role.ROOT})
+    @RequiresPermission(Permission.DELETE_DISPATCH_CENTER)
     @DeleteMapping("/{uid}")
     public Response<EmergencyUnit> delete(@PathVariable String uid) {
         log.info("Deleting dispatch center: {}", uid);

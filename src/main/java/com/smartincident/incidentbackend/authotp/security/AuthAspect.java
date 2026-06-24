@@ -1,10 +1,9 @@
 package com.smartincident.incidentbackend.authotp.security;
 
 import com.smartincident.incidentbackend.authotp.entity.User;
-import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.enums.Permission;
-import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.permission.service.PermissionService;
+import com.smartincident.incidentbackend.utils.LoggedUser;
 import lombok.RequiredArgsConstructor;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
@@ -21,17 +20,24 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class AuthAspect {
 
-    private final UserRepository userRepository;
     private final PermissionService permissionService;
 
+    /**
+     * Reads the User cached by JwtAuthFilter for this request (LoggedUser) instead of
+     * re-querying the DB on every @Authenticated/@RequiresPermission check.
+     * LoggedUser.get() itself falls back to a DB lookup if the cache is empty (e.g. non-HTTP
+     * contexts), so behavior is unchanged when the cache wasn't populated.
+     */
     private User resolveCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated() || auth.getPrincipal() == null) {
             throw new AccessDeniedException("Authentication required");
         }
-        String phone = (String) auth.getPrincipal();
-        return userRepository.findByPhoneNumber(phone)
-                .orElseThrow(() -> new AccessDeniedException("Authenticated user not found"));
+        User user = LoggedUser.get();
+        if (user == null) {
+            throw new AccessDeniedException("Authenticated user not found");
+        }
+        return user;
     }
 
     @Before("@annotation(com.smartincident.incidentbackend.authotp.security.Authenticated)")
@@ -39,16 +45,6 @@ public class AuthAspect {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
             throw new AccessDeniedException("Authentication required");
-        }
-    }
-
-    @Before("@annotation(authorizedRole)")
-    public void beforeAuthorizedRole(AuthorizedRole authorizedRole) {
-        User user = resolveCurrentUser();
-        Role userRole = user.getRole();
-        boolean allowed = Arrays.stream(authorizedRole.value()).anyMatch(r -> r == userRole);
-        if (!allowed) {
-            throw new AccessDeniedException("Access denied: role " + userRole + " is not permitted");
         }
     }
 

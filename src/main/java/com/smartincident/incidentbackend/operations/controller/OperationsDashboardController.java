@@ -1,8 +1,8 @@
 package com.smartincident.incidentbackend.operations.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.operations.dto.NationalDashboardDto;
 import com.smartincident.incidentbackend.operations.dto.OperationsDashboardDto;
 import com.smartincident.incidentbackend.operations.service.NationalDashboardService;
@@ -28,8 +28,7 @@ public class OperationsDashboardController {
      * Accessible to supervisors, admins, and ROOT. AGENCY_ADMIN sees only their agency.
      */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_ANALYTICS)
     @GetMapping("/dashboard")
     public Response<OperationsDashboardDto> getDashboard() {
         log.info("Loading operations dashboard");
@@ -42,7 +41,7 @@ public class OperationsDashboardController {
      * ROOT only (national command centre use).
      */
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.AGENCY_ADMIN})
+    @RequiresPermission(Permission.VIEW_NATIONAL_ANALYTICS)
     @GetMapping("/national")
     public Response<NationalDashboardDto> getNationalDashboard() {
         log.info("Loading national command dashboard");

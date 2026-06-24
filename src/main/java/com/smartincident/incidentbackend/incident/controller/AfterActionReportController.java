@@ -1,8 +1,8 @@
 package com.smartincident.incidentbackend.incident.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.incident.dto.AfterActionReportDto;
 import com.smartincident.incidentbackend.incident.entity.AfterActionReport;
 import com.smartincident.incidentbackend.incident.service.AfterActionReportService;
@@ -21,8 +21,7 @@ public class AfterActionReportController {
 
     /** Create or update an after-action report. Only for RESOLVED/CLOSED incidents. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.SUBMIT_AFTER_ACTION_REPORT)
     @PostMapping
     public Response<AfterActionReport> createOrUpdate(@RequestBody AfterActionReportDto dto) {
         log.info("Saving after-action report for incident: {}", dto.getIncidentUid());
@@ -31,7 +30,7 @@ public class AfterActionReportController {
 
     /** Supervisor/Admin approves the report. Locks it from further edits. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_AFTER_ACTION_REPORT)
     @PostMapping("/{uid}/approve")
     public Response<AfterActionReport> approve(@PathVariable String uid) {
         log.info("Approving after-action report: {}", uid);
@@ -40,8 +39,7 @@ public class AfterActionReportController {
 
     /** Get report by UID. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_AFTER_ACTION_REPORT)
     @GetMapping("/{uid}")
     public Response<AfterActionReport> getByUid(@PathVariable String uid) {
         return aarService.getByUid(uid);
@@ -49,8 +47,7 @@ public class AfterActionReportController {
 
     /** Get report for a specific incident. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_AFTER_ACTION_REPORT)
     @GetMapping("/incident/{incidentUid}")
     public Response<AfterActionReport> getByIncident(@PathVariable String incidentUid) {
         return aarService.getByIncident(incidentUid);
@@ -58,7 +55,7 @@ public class AfterActionReportController {
 
     /** Paginated list — filter by approved status and/or author. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_AFTER_ACTION_REPORT)
     @GetMapping
     public ResponsePage<AfterActionReport> getAll(
             @ModelAttribute PageableParam pageableParam,

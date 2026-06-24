@@ -1,10 +1,10 @@
 package com.smartincident.incidentbackend.dispatcher.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.dispatcher.dto.UnitDispatchRequest;
 import com.smartincident.incidentbackend.dispatcher.service.UnitDispatchService;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.incident.entity.IncidentReport;
 import com.smartincident.incidentbackend.utils.Response;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +26,7 @@ public class UnitDispatchController {
      * The system automatically assigns on-duty crew from each unit.
      */
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.DISPATCHER})
+    @RequiresPermission(Permission.DISPATCH_UNITS)
     @PostMapping("/{incidentUid}/dispatch-units")
     public Response<IncidentReport> dispatchUnits(
             @PathVariable String incidentUid,
@@ -37,10 +37,12 @@ public class UnitDispatchController {
 
     /**
      * Operational monitor: all currently active (DISPATCHED / IN_PROGRESS) incidents.
-     * Used by DISPATCH_CENTER_ADMIN and DISPATCHER_SUPERVISOR for oversight.
+     * Used by DISPATCH_CENTER_ADMIN / DISPATCHER_SUPERVISOR for oversight, and by
+     * STATION_ADMIN for the Post Operations dashboard (which has VIEW_PENDING_INCIDENTS
+     * but not VIEW_SLA_METRICS).
      */
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.AGENCY_ADMIN, Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.DISPATCHER})
+    @RequiresPermission(value = {Permission.VIEW_SLA_METRICS, Permission.VIEW_PENDING_INCIDENTS}, requireAll = false)
     @GetMapping("/operational")
     public Response<List<IncidentReport>> getOperationalIncidents() {
         return unitDispatchService.getOperationalIncidents();

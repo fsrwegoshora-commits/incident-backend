@@ -1,8 +1,8 @@
 package com.smartincident.incidentbackend.police.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.police.dto.TrafficCheckPointDto;
 import com.smartincident.incidentbackend.police.entity.TrafficCheckpoint;
 import com.smartincident.incidentbackend.police.service.TrafficCheckPointService;
@@ -21,38 +21,35 @@ public class TrafficCheckPointController {
     private final TrafficCheckPointService trafficCheckPointService;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_CHECKPOINTS)
     @PostMapping
     public Response<TrafficCheckpoint> saveTrafficCheckpoint(@RequestBody TrafficCheckPointDto trafficCheckPointDto) {
         return trafficCheckPointService.saveTrafficCheckpoint(trafficCheckPointDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_CHECKPOINTS)
     @DeleteMapping("/{uid}")
     public Response<TrafficCheckpoint> deleteTrafficCheckpoint(@PathVariable String uid) {
         return trafficCheckPointService.deleteTrafficCheckpoint(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT,
-                     Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.DISPATCHER})
+    @RequiresPermission(Permission.VIEW_CHECKPOINTS)
     @GetMapping("/{uid}")
     public Response<TrafficCheckpoint> getTrafficCheckpoint(@PathVariable String uid) {
         return trafficCheckPointService.getTrafficCheckpointByUid(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT,
-                     Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.DISPATCHER})
+    @RequiresPermission(Permission.VIEW_CHECKPOINTS)
     @GetMapping
     public ResponsePage<TrafficCheckpoint> getTrafficCheckpoints(@ModelAttribute PageableParam pageableParam) {
         return trafficCheckPointService.getCheckpoints(pageableParam != null ? pageableParam : new PageableParam());
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT,
-                     Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.DISPATCHER})
+    @RequiresPermission(Permission.VIEW_CHECKPOINTS)
     @GetMapping("/station/{stationUid}")
     public ResponsePage<TrafficCheckpoint> getTrafficCheckpointsByPoliceStation(
             @ModelAttribute PageableParam pageableParam,
@@ -61,7 +58,7 @@ public class TrafficCheckPointController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_CHECKPOINTS)
     @PutMapping("/{checkpointUid}/assign-supervisor/{officerUid}")
     public Response<TrafficCheckpoint> assignSupervisor(
             @PathVariable String checkpointUid,
@@ -70,7 +67,7 @@ public class TrafficCheckPointController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_CHECKPOINTS)
     @PutMapping("/{checkpointUid}/change-supervisor/{newOfficerUid}")
     public Response<TrafficCheckpoint> changeSupervisor(
             @PathVariable String checkpointUid,
@@ -79,7 +76,7 @@ public class TrafficCheckPointController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.STATION_ADMIN})
+    @RequiresPermission(Permission.MANAGE_CHECKPOINTS)
     @PutMapping("/{checkpointUid}/toggle")
     public Response<TrafficCheckpoint> activateOrDeactivateCheckpoint(@PathVariable String checkpointUid) {
         return trafficCheckPointService.activateOrDeactivateCheckpoint(checkpointUid);

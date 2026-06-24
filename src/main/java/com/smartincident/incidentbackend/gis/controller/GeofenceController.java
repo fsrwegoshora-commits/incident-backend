@@ -1,9 +1,9 @@
 package com.smartincident.incidentbackend.gis.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.enums.GeofenceType;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.gis.dto.GeofenceDto;
 import com.smartincident.incidentbackend.gis.entity.Geofence;
 import com.smartincident.incidentbackend.gis.service.GeofenceService;
@@ -22,8 +22,7 @@ public class GeofenceController {
     private final GeofenceService geofenceService;
 
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping
     public ResponseList<Geofence> getAll(
             @RequestParam(required = false) String agencyUid,
@@ -32,15 +31,14 @@ public class GeofenceController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/{uid}")
     public Response<Geofence> getByUid(@PathVariable String uid) {
         return geofenceService.getByUid(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.DISPATCH_CENTER_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_GEOFENCES)
     @PostMapping
     public Response<Geofence> create(@RequestBody GeofenceDto dto) {
         log.info("Creating geofence: {}", dto.getName());
@@ -48,7 +46,7 @@ public class GeofenceController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.DISPATCH_CENTER_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_GEOFENCES)
     @PutMapping("/{uid}")
     public Response<Geofence> update(@PathVariable String uid, @RequestBody GeofenceDto dto) {
         log.info("Updating geofence: {}", uid);
@@ -56,7 +54,7 @@ public class GeofenceController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.DISPATCH_CENTER_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_GEOFENCES)
     @DeleteMapping("/{uid}")
     public Response<Geofence> delete(@PathVariable String uid) {
         log.info("Deleting geofence: {}", uid);

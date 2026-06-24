@@ -1,8 +1,8 @@
 package com.smartincident.incidentbackend.police.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.police.dto.BulkCheckpointShiftDto;
 import com.smartincident.incidentbackend.police.dto.OfficerShiftDto;
 import com.smartincident.incidentbackend.police.entity.OfficerShift;
@@ -21,35 +21,35 @@ public class OfficerShiftController {
     private final OfficerShiftService officerShiftService;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_OFFICER_SHIFTS)
     @PostMapping
     public Response<OfficerShift> saveShift(@RequestBody OfficerShiftDto officerShiftDto) {
         return officerShiftService.saveShift(officerShiftDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_OFFICER_SHIFTS)
     @PutMapping("/{uid}/excuse")
     public Response<OfficerShift> excuseShift(@PathVariable String uid, @RequestParam String reason) {
         return officerShiftService.excuseShift(uid, reason);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_OFFICER_SHIFTS)
     @DeleteMapping("/{uid}")
     public Response<OfficerShift> deleteOfficerShift(@PathVariable String uid) {
         return officerShiftService.deleteOfficerShift(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_OFFICER_SHIFTS)
     @PutMapping("/{uid}/reassign/{newOfficerUid}")
     public Response<OfficerShift> reassignShift(@PathVariable String uid, @PathVariable String newOfficerUid) {
         return officerShiftService.reassignShift(uid, newOfficerUid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_OFFICER_SHIFTS)
     @GetMapping("/checkpoint/{checkpointUid}")
     public ResponsePage<OfficerShift> getPoliceOfficerShiftsByCheckpoint(
             @ModelAttribute PageableParam pageableParam,
@@ -58,21 +58,21 @@ public class OfficerShiftController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_OFFICER_SHIFTS)
     @GetMapping
     public ResponsePage<OfficerShift> getPoliceOfficerShifts(@ModelAttribute PageableParam pageableParam) {
         return officerShiftService.getPoliceOfficerShifts(pageableParam != null ? pageableParam : new PageableParam());
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.POLICE_OFFICER})
+    @RequiresPermission(Permission.VIEW_OWN_OFFICER_SHIFT)
     @GetMapping("/{uid}")
     public Response<OfficerShift> getPoliceOfficerShift(@PathVariable String uid) {
         return officerShiftService.getPoliceOfficerShift(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_OFFICER_SHIFTS)
     @GetMapping("/station/{policeStationUid}")
     public ResponsePage<OfficerShift> getShiftsByStation(
             @ModelAttribute PageableParam pageableParam,
@@ -81,7 +81,7 @@ public class OfficerShiftController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.POLICE_OFFICER})
+    @RequiresPermission(Permission.VIEW_OWN_OFFICER_SHIFT)
     @GetMapping("/officer/{policeOfficerUid}")
     public ResponsePage<OfficerShift> getShiftsByPoliceOfficer(
             @ModelAttribute PageableParam pageableParam,
@@ -90,21 +90,21 @@ public class OfficerShiftController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.CITIZEN, Role.POLICE_OFFICER})
+    @RequiresPermission(Permission.VIEW_OFFICER_ON_DUTY)
     @GetMapping("/on-duty/{stationUid}")
     public Response<OfficerShift> getCurrentOfficerOnDuty(@PathVariable String stationUid) {
         return officerShiftService.getCurrentOfficerOnDuty(stationUid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_OFFICER_SHIFTS)
     @GetMapping("/on-duty/all/{stationUid}")
     public ResponseList<OfficerShift> getAllOfficersOnDutyNow(@PathVariable String stationUid) {
         return officerShiftService.getAllOfficersOnDutyNow(stationUid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_OFFICER_SHIFTS)
     @PostMapping("/checkpoint/bulk")
     public ResponseList<OfficerShift> assignCheckpointShiftBulk(@RequestBody BulkCheckpointShiftDto bulkCheckpointShiftDto) {
         return officerShiftService.assignCheckpointShiftBulk(bulkCheckpointShiftDto);

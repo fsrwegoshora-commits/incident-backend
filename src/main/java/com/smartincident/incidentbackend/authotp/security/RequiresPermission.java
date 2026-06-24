@@ -9,6 +9,10 @@ import java.lang.annotation.*;
 @Documented
 public @interface RequiresPermission {
     Permission[] value();
-    /** true = caller must have ALL listed permissions; false (default) = ANY one suffices. */
-    boolean requireAll() default false;
+    /**
+     * true (default) = caller must have ALL listed permissions; false = ANY one suffices.
+     * Defaults to fail-closed (AND) so a future multi-permission usage that means "needs both"
+     * doesn't silently grant access via OR semantics. Has no effect on single-permission usages.
+     */
+    boolean requireAll() default true;
 }

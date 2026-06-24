@@ -1,8 +1,8 @@
 package com.smartincident.incidentbackend.shift.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.shift.dto.OnDutyPersonnelDto;
 import com.smartincident.incidentbackend.shift.service.ShiftService;
 import com.smartincident.incidentbackend.utils.Response;
@@ -22,8 +22,7 @@ public class ShiftController {
 
     /** Unified view of all on-duty personnel across police, fire, medical and dispatch. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/on-duty")
     public Response<OnDutyPersonnelDto> getOnDutyPersonnel() {
         log.info("Fetching all on-duty personnel");

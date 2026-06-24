@@ -4,7 +4,6 @@ import com.smartincident.incidentbackend.authotp.dto.UserDto;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
 import com.smartincident.incidentbackend.authotp.security.JwtAuthInterceptor;
 import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.authotp.service.UserService;
@@ -64,7 +63,7 @@ public class UserController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.CITIZEN})
+    @RequiresPermission(Permission.DELETE_OWN_ACCOUNT)
     @DeleteMapping("/me")
     public Response<User> deleteMyAccount() {
         try {

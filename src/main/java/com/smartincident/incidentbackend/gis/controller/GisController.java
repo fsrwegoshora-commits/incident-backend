@@ -1,8 +1,8 @@
 package com.smartincident.incidentbackend.gis.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.gis.dto.HeatmapDto;
 import com.smartincident.incidentbackend.gis.dto.LiveResourceDto;
 import com.smartincident.incidentbackend.gis.service.GisService;
@@ -24,9 +24,7 @@ public class GisController {
      * and all emergency unit locations.
      */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT,
-                     Role.POLICE_OFFICER, Role.FIRE_OFFICER, Role.MEDIC})
+    @RequiresPermission(Permission.VIEW_LIVE_RESOURCES)
     @GetMapping("/resources")
     public Response<LiveResourceDto> getLiveResources() {
         log.info("Fetching live resource map data");
@@ -41,8 +39,7 @@ public class GisController {
      * @param gridSize grid cell size in degrees (default 0.05 ≈ 5.5 km)
      */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.AGENCY_ADMIN, Role.ROOT, Role.STATION_ADMIN})
+    @RequiresPermission(Permission.VIEW_ANALYTICS)
     @GetMapping("/heatmap")
     public Response<HeatmapDto> getHeatmap(
             @RequestParam(required = false) String type,

@@ -1,8 +1,9 @@
 package com.smartincident.incidentbackend.police.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.enums.AppointmentPosition;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.police.dto.OfficerProfileUpdateDto;
 import com.smartincident.incidentbackend.police.dto.PoliceOfficerDto;
@@ -39,28 +40,28 @@ public class PoliceOfficerController {
     private final TrafficCheckPointRepository checkpointRepository;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @PostMapping
     public Response<PoliceOfficer> savePoliceOfficer(@RequestBody PoliceOfficerDto policeOfficerDto) {
         return policeOfficerService.savePoliceOfficer(policeOfficerDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @GetMapping("/{uid}")
     public Response<PoliceOfficer> getPoliceOfficer(@PathVariable String uid) {
         return policeOfficerService.getPoliceOfficer(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @DeleteMapping("/{uid}")
     public Response<PoliceOfficer> deletePoliceOfficer(@PathVariable String uid) {
         return policeOfficerService.deletePoliceOfficer(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @PatchMapping("/{uid}/profile")
     public Response<PoliceOfficerResponse> updateOfficerProfile(
             @PathVariable String uid,
@@ -69,7 +70,7 @@ public class PoliceOfficerController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.TRANSFER_OFFICER)
     @PatchMapping("/{uid}/transfer")
     public Response<PoliceOfficerResponse> transferOfficer(
             @PathVariable String uid,
@@ -81,14 +82,14 @@ public class PoliceOfficerController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @GetMapping
     public ResponsePage<PoliceOfficerResponse> getPoliceOfficers(@ModelAttribute PageableParam pageableParam) {
         return policeOfficerService.getPoliceOfficers(pageableParam != null ? pageableParam : new PageableParam());
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @GetMapping("/by-station/{policeStationUid}")
     public ResponsePage<PoliceOfficerResponse> getPoliceOfficersByStation(
             @ModelAttribute PageableParam pageableParam,
@@ -97,7 +98,7 @@ public class PoliceOfficerController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_AVAILABLE_OFFICERS)
     @GetMapping("/available/date")
     public ResponseList<PoliceOfficer> getAvailableOfficersForDate(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -123,7 +124,7 @@ public class PoliceOfficerController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_AVAILABLE_OFFICERS)
     @GetMapping("/available/slot")
     public ResponseList<PoliceOfficer> getAvailableOfficersForSlot(
             @RequestParam String date,

@@ -3,7 +3,7 @@ package com.smartincident.incidentbackend.incident.controller;
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.repository.UserRepository;
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.enums.*;
 import com.smartincident.incidentbackend.incident.dto.IncidentAgencyDto;
 import com.smartincident.incidentbackend.incident.entity.IncidentAgency;
@@ -43,7 +43,7 @@ public class IncidentAgencyController {
      * Body: { incidentUid, agencyUid, agencyType, notes? }
      */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.ROOT, Role.AGENCY_ADMIN, Role.STATION_ADMIN})
+    @RequiresPermission(Permission.DISPATCH_AGENCY)
     @PostMapping("/api/incidents/dispatch")
     public Response<IncidentAgency> dispatchAgency(@RequestBody Map<String, String> body) {
         String incidentUid = body.get("incidentUid");
@@ -119,7 +119,7 @@ public class IncidentAgencyController {
 
     /** Update the response status of an IncidentAgency record. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.ROOT, Role.AGENCY_ADMIN, Role.STATION_ADMIN})
+    @RequiresPermission(Permission.DISPATCH_AGENCY)
     @PutMapping("/api/incident-agencies/{uid}/status")
     public Response<IncidentAgency> updateStatus(
             @PathVariable String uid,

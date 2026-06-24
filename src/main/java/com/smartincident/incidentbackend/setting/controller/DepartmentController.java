@@ -1,8 +1,8 @@
 package com.smartincident.incidentbackend.setting.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.setting.dto.DepartmentDto;
 import com.smartincident.incidentbackend.setting.entity.Department;
 import com.smartincident.incidentbackend.setting.service.DepartmentService;
@@ -21,28 +21,28 @@ public class DepartmentController {
     private final DepartmentService departmentService;
 
     @Authenticated
-    @AuthorizedRole({Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_DEPARTMENTS)
     @PostMapping
     public Response<Department> saveDepartment(@RequestBody DepartmentDto departmentDto) {
         return departmentService.saveDepartment(departmentDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_DEPARTMENTS)
     @DeleteMapping("/{uid}")
     public Response<Department> deleteDepartment(@PathVariable String uid) {
         return departmentService.deleteDepartment(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.STATION_ADMIN})
+    @RequiresPermission(Permission.VIEW_DEPARTMENTS)
     @GetMapping("/{uid}")
     public Response<Department> getDepartment(@PathVariable String uid) {
         return departmentService.getDepartmentByUid(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.STATION_ADMIN})
+    @RequiresPermission(Permission.VIEW_DEPARTMENTS)
     @GetMapping
     public ResponsePage<Department> getDepartments(@ModelAttribute PageableParam pageableParam) {
         return departmentService.getDepartments(pageableParam != null ? pageableParam : new PageableParam());

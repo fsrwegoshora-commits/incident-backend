@@ -1,8 +1,8 @@
 package com.smartincident.incidentbackend.police.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.police.dto.PoliceVehicleDto;
 import com.smartincident.incidentbackend.police.dto.VehicleAssignmentDto;
 import com.smartincident.incidentbackend.police.entity.PoliceVehicle;
@@ -21,23 +21,21 @@ public class PoliceVehicleController {
     private final PoliceVehicleService vehicleService;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @PostMapping
     public Response<PoliceVehicle> saveVehicle(@RequestBody PoliceVehicleDto dto) {
         return vehicleService.saveVehicle(dto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT,
-                     Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/{uid}")
     public Response<PoliceVehicle> getVehicle(@PathVariable String uid) {
         return vehicleService.getVehicle(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT,
-                     Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/station/{stationUid}")
     public ResponsePage<PoliceVehicle> getByStation(
             @ModelAttribute PageableParam pageableParam,
@@ -47,14 +45,14 @@ public class PoliceVehicleController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @GetMapping
     public ResponsePage<PoliceVehicle> getAll(@ModelAttribute PageableParam pageableParam) {
         return vehicleService.getVehicles(pageableParam != null ? pageableParam : new PageableParam());
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @PatchMapping("/{uid}/assign")
     public Response<PoliceVehicle> assignVehicle(
             @PathVariable String uid,
@@ -63,7 +61,7 @@ public class PoliceVehicleController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @PutMapping("/{uid}/status")
     public Response<PoliceVehicle> updateStatus(
             @PathVariable String uid,
@@ -72,7 +70,7 @@ public class PoliceVehicleController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @DeleteMapping("/{uid}")
     public Response<PoliceVehicle> deleteVehicle(@PathVariable String uid) {
         return vehicleService.deleteVehicle(uid);

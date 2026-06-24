@@ -1,9 +1,9 @@
 package com.smartincident.incidentbackend.police.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.enums.PatrolTeamStatus;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.police.dto.PatrolTeamDto;
 import com.smartincident.incidentbackend.police.entity.PatrolTeam;
 import com.smartincident.incidentbackend.police.service.PatrolTeamService;
@@ -21,30 +21,28 @@ public class PatrolTeamController {
     private final PatrolTeamService patrolTeamService;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @PostMapping
     public Response<PatrolTeam> savePatrolTeam(@RequestBody PatrolTeamDto dto) {
         return patrolTeamService.savePatrolTeam(dto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT,
-                     Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping
     public ResponsePage<PatrolTeam> getPatrolTeams(@ModelAttribute PageableParam pageableParam) {
         return patrolTeamService.getPatrolTeams(pageableParam != null ? pageableParam : new PageableParam());
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT,
-                     Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/{uid}")
     public Response<PatrolTeam> getPatrolTeam(@PathVariable String uid) {
         return patrolTeamService.getPatrolTeam(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @PatchMapping("/{uid}/status")
     public Response<PatrolTeam> updateStatus(
             @PathVariable String uid,
@@ -53,7 +51,7 @@ public class PatrolTeamController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @DeleteMapping("/{uid}")
     public Response<PatrolTeam> deletePatrolTeam(@PathVariable String uid) {
         return patrolTeamService.deletePatrolTeam(uid);

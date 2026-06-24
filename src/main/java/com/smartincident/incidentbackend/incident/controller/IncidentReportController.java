@@ -1,11 +1,9 @@
 package com.smartincident.incidentbackend.incident.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
 import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.enums.IncidentStatus;
 import com.smartincident.incidentbackend.enums.Permission;
-import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.aar.dto.AarDto;
 import com.smartincident.incidentbackend.aar.entity.AfterActionReview;
 import com.smartincident.incidentbackend.aar.service.AfterActionReviewService;
@@ -50,7 +48,7 @@ public class IncidentReportController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.ASSIGN_OFFICER)
     @PutMapping("/{incidentUid}/assign-officer/{officerUid}")
     public Response<IncidentReport> assignOfficer(@PathVariable String incidentUid,
                                                   @PathVariable String officerUid) {
@@ -80,7 +78,7 @@ public class IncidentReportController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.DISPATCHER, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_PENDING_INCIDENTS)
     @GetMapping("/pending")
     public ResponsePage<IncidentReport> getPendingStationIncidents(
             @ModelAttribute PageableParam pageableParam) {
@@ -90,8 +88,7 @@ public class IncidentReportController {
 
     /** Advance an incident through the standardised lifecycle state machine. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.ROOT,
-                     Role.POLICE_OFFICER, Role.FIRE_OFFICER, Role.MEDIC, Role.STATION_ADMIN, Role.AGENCY_ADMIN})
+    @RequiresPermission(Permission.UPDATE_INCIDENT)
     @PutMapping("/{uid}/status")
     public Response<IncidentReport> transitionStatus(
             @PathVariable String uid,
@@ -104,8 +101,7 @@ public class IncidentReportController {
 
     /** Full audit trail of status transitions for an incident. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.ROOT, Role.AGENCY_ADMIN, Role.STATION_ADMIN})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/{uid}/history")
     public Response<List<IncidentStatusHistory>> getStatusHistory(@PathVariable String uid) {
         return incidentService.getStatusHistory(uid);
@@ -113,7 +109,7 @@ public class IncidentReportController {
 
     /** Dispatch queue — scoped by role (DISPATCHER: own queue, DC_ADMIN/SUPERVISOR: entire center, ROOT: all). */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.ROOT, Role.AGENCY_ADMIN})
+    @RequiresPermission(Permission.MANAGE_DISPATCH_QUEUE)
     @GetMapping("/dispatch-queue")
     public ResponsePage<IncidentReport> getDispatchQueue(
             @ModelAttribute PageableParam pageableParam,
@@ -134,7 +130,7 @@ public class IncidentReportController {
 
     /** Investigation queue — NON_EMERGENCY cases assigned to the station, bypassing dispatch. */
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_INVESTIGATION_QUEUE)
     @GetMapping("/investigation-queue")
     public ResponsePage<IncidentReport> getInvestigationQueue(
             @ModelAttribute PageableParam pageableParam,
@@ -144,7 +140,7 @@ public class IncidentReportController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.POLICE_OFFICER, Role.STATION_ADMIN, Role.DISPATCHER, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_OFFICER_INCIDENTS)
     @GetMapping("/officer")
     public ResponsePage<IncidentReport> getOfficerIncidents(
             @ModelAttribute PageableParam pageableParam,
@@ -154,7 +150,7 @@ public class IncidentReportController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.POLICE_OFFICER, Role.STATION_ADMIN, Role.DISPATCHER, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_OFFICER_INCIDENTS)
     @GetMapping("/nearby")
     public Response<List<IncidentReport>> getNearbyIncidents(
             @RequestParam Double latitude,
@@ -175,7 +171,7 @@ public class IncidentReportController {
 
     /** Dispatcher escalates incident to supervisor / DC admin when resources are unavailable. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.ESCALATE_INCIDENT)
     @PostMapping("/{uid}/escalate")
     public Response<IncidentReport> escalateIncident(
             @PathVariable String uid,
@@ -187,7 +183,7 @@ public class IncidentReportController {
 
     /** Return all incidents that have breached their SLA deadline. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_SLA_BREACHES)
     @GetMapping("/sla-breached")
     public ResponsePage<IncidentReport> getSlaBreachedIncidents(@ModelAttribute PageableParam pageableParam) {
         return incidentService.getSlaBreachedIncidents(pageableParam);
@@ -195,8 +191,7 @@ public class IncidentReportController {
 
     /** Return incidents approaching SLA deadline within the next N minutes. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_SLA_METRICS)
     @GetMapping("/sla-approaching")
     public ResponsePage<IncidentReport> getSlaApproachingIncidents(
             @ModelAttribute PageableParam pageableParam,
@@ -208,7 +203,7 @@ public class IncidentReportController {
 
     /** Designate an incident commander and optionally set the lead agency. */
     @Authenticated
-    @AuthorizedRole({Role.AGENCY_ADMIN, Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.ROOT})
+    @RequiresPermission(Permission.DESIGNATE_COMMANDER)
     @PostMapping("/{uid}/commander")
     public Response<IncidentReport> designateCommander(
             @PathVariable String uid,
@@ -219,8 +214,7 @@ public class IncidentReportController {
 
     /** Get the full command structure — commander, lead agency, support agencies. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.AGENCY_ADMIN, Role.ROOT, Role.STATION_ADMIN})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/{uid}/command-structure")
     public Response<CommandStructureDto> getCommandStructure(@PathVariable String uid) {
         return incidentService.getCommandStructure(uid);
@@ -239,7 +233,7 @@ public class IncidentReportController {
 
     /** Station Admin approves the resolved incident before it can be closed by Dispatcher. */
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.OPERATIONAL_POST_SUPERVISOR, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.STATION_REVIEW_INCIDENT)
     @PostMapping("/{uid}/station-review")
     public Response<IncidentReport> stationReview(
             @PathVariable String uid,
@@ -251,7 +245,7 @@ public class IncidentReportController {
 
     /** Dispatcher marks final sign-off after station review — incident can then be CLOSED. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.DISPATCHER_REVIEW_INCIDENT)
     @PostMapping("/{uid}/dispatcher-review")
     public Response<IncidentReport> dispatcherReview(
             @PathVariable String uid,
@@ -265,8 +259,7 @@ public class IncidentReportController {
 
     /** Submit an After Action Review for a closed/resolved incident. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN, Role.STATION_ADMIN,
-                     Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.SUBMIT_AAR)
     @PostMapping("/{uid}/aar")
     public Response<AfterActionReview> submitAar(
             @PathVariable String uid,
@@ -277,8 +270,7 @@ public class IncidentReportController {
 
     /** Retrieve the After Action Review for an incident. */
     @Authenticated
-    @AuthorizedRole({Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN,
-                     Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_AFTER_ACTION)
     @GetMapping("/{uid}/aar")
     public Response<AfterActionReview> getAar(@PathVariable String uid) {
         return aarService.get(uid);
@@ -286,7 +278,7 @@ public class IncidentReportController {
 
     /** Agency Admin or ROOT approves a submitted AAR. */
     @Authenticated
-    @AuthorizedRole({Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.APPROVE_AAR)
     @PostMapping("/{uid}/aar/approve")
     public Response<AfterActionReview> approveAar(@PathVariable String uid) {
         log.info("Approving AAR for incident {}", uid);

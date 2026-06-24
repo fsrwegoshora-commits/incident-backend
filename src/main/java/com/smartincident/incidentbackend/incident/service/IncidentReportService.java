@@ -267,9 +267,43 @@ public class IncidentReportService {
 
     public Response<IncidentReport> getIncident(String uid) {
         if (uid == null) return Response.error("Incident UID is required");
-        return incidentRepository.findByUid(uid)
-                .map(Response::success)
-                .orElseGet(() -> Response.error("Incident not found"));
+        Optional<IncidentReport> opt = incidentRepository.findByUid(uid);
+        if (opt.isEmpty()) return Response.error("Incident not found");
+        IncidentReport incident = opt.get();
+        if (!canAccessIncident(incident)) return Response.error("Access denied");
+        return Response.success(incident);
+    }
+
+    /**
+     * Whether the logged-in user is allowed to view this specific incident — prevents IDOR
+     * (any authenticated user guessing/enumerating UIDs to read incidents that aren't theirs).
+     * Allowed: the reporter, the assigned dispatcher/officer/commander, staff of the assigned
+     * station/unit, or ROOT/AGENCY_ADMIN (system-wide visibility).
+     */
+    private boolean canAccessIncident(IncidentReport incident) {
+        Role role = LoggedUser.getRole();
+        if (role == Role.ROOT || role == Role.AGENCY_ADMIN) return true;
+
+        String userUid = LoggedUser.getUid();
+        if (userUid != null) {
+            if (incident.getReportedBy() != null && userUid.equals(incident.getReportedBy().getUid())) return true;
+            if (incident.getAssignedDispatcher() != null && userUid.equals(incident.getAssignedDispatcher().getUid())) return true;
+            if (incident.getIncidentCommander() != null && userUid.equals(incident.getIncidentCommander().getUid())) return true;
+        }
+
+        String officerUid = LoggedUser.getOfficerUid();
+        if (officerUid != null && incident.getAssignedOfficer() != null
+                && officerUid.equals(incident.getAssignedOfficer().getUid())) return true;
+
+        String stationUid = LoggedUser.getPoliceStationUid();
+        if (stationUid != null && incident.getAssignedPoliceStation() != null
+                && stationUid.equals(incident.getAssignedPoliceStation().getUid())) return true;
+
+        String unitUid = LoggedUser.getEmergencyUnitUid();
+        if (unitUid != null && incident.getAssignedUnit() != null
+                && unitUid.equals(incident.getAssignedUnit().getUid())) return true;
+
+        return false;
     }
 
     public ResponsePage<IncidentReport> getMyIncidents(PageableParam pageableParam) {
@@ -1065,6 +1099,7 @@ public class IncidentReportService {
         Optional<IncidentReport> opt = incidentRepository.findByUid(incidentUid);
         if (opt.isEmpty()) return Response.error("Incident not found");
         IncidentReport incident = opt.get();
+        if (!canAccessIncident(incident)) return Response.error("Access denied");
 
         List<IncidentStatusHistory> history = statusHistoryRepository.findByIncidentUid(incidentUid);
 

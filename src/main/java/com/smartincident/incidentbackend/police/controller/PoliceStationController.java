@@ -2,9 +2,10 @@ package com.smartincident.incidentbackend.police.controller;
 
 import com.smartincident.incidentbackend.authotp.entity.User;
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.authotp.security.JwtAuthInterceptor;
 import com.smartincident.incidentbackend.authotp.service.UserService;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.enums.Role;
 import com.smartincident.incidentbackend.police.dto.LocationDto;
 import com.smartincident.incidentbackend.police.dto.PoliceStationDto;
@@ -30,30 +31,28 @@ public class PoliceStationController {
     private final PoliceStationRepository policeStationRepository;
 
     @Authenticated
-    @AuthorizedRole({Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_POLICE_STATION)
     @PostMapping
     public Response<PoliceStation> savePoliceStation(@RequestBody PoliceStationDto policeStationDto) {
         return policeStationService.savePoliceStation(policeStationDto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT,
-                     Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.DISPATCHER})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/{uid}")
     public Response<PoliceStation> getPoliceStation(@PathVariable String uid) {
         return policeStationService.getPoliceStation(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.ROOT, Role.AGENCY_ADMIN})
+    @RequiresPermission(Permission.MANAGE_POLICE_STATION)
     @DeleteMapping("/{uid}")
     public Response<PoliceStation> deletePoliceStation(@PathVariable String uid) {
         return policeStationService.deletePoliceStation(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT,
-                     Role.DISPATCH_CENTER_ADMIN, Role.DISPATCHER_SUPERVISOR, Role.DISPATCHER})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping
     public ResponsePage<PoliceStation> getPoliceStations(
             @ModelAttribute PageableParam pageableParam,
@@ -63,7 +62,7 @@ public class PoliceStationController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @GetMapping("/admin")
     public ResponseList<PoliceStationDto> getStationsByAdmin() {
         String phone = jwtAuthInterceptor.extractPhoneFromRequest();
@@ -109,7 +108,7 @@ public class PoliceStationController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.POLICE_OFFICER, Role.CITIZEN})
+    @RequiresPermission(Permission.VIEW_NEARBY_STATIONS)
     @GetMapping("/nearby")
     public ResponseList<PoliceStation> getNearbyPoliceStations(
             @RequestParam double latitude,

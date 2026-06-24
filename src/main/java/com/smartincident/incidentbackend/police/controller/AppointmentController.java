@@ -1,9 +1,9 @@
 package com.smartincident.incidentbackend.police.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.enums.AppointmentStatus;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.police.dto.AppointmentDto;
 import com.smartincident.incidentbackend.police.entity.StationAppointment;
 import com.smartincident.incidentbackend.police.service.AppointmentService;
@@ -22,14 +22,14 @@ public class AppointmentController {
     private final AppointmentService appointmentService;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @PostMapping
     public Response<StationAppointment> saveAppointment(@RequestBody AppointmentDto dto) {
         return appointmentService.saveAppointment(dto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_STATION_APPOINTMENTS)
     @GetMapping("/station/{stationUid}")
     public ResponsePage<StationAppointment> getByStation(
             @ModelAttribute PageableParam pageableParam,
@@ -40,21 +40,21 @@ public class AppointmentController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.VIEW_STATION_APPOINTMENTS)
     @GetMapping("/station/{stationUid}/active")
     public ResponseList<StationAppointment> getActiveByStation(@PathVariable String stationUid) {
         return appointmentService.getActiveByStation(stationUid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.ROOT, Role.POLICE_OFFICER})
+    @RequiresPermission(Permission.VIEW_OFFICER_APPOINTMENTS)
     @GetMapping("/officer/{officerUid}")
     public ResponseList<StationAppointment> getByOfficer(@PathVariable String officerUid) {
         return appointmentService.getByOfficer(officerUid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @PatchMapping("/{uid}/status")
     public Response<StationAppointment> updateStatus(
             @PathVariable String uid,
@@ -63,7 +63,7 @@ public class AppointmentController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @DeleteMapping("/{uid}")
     public Response<StationAppointment> deleteAppointment(@PathVariable String uid) {
         return appointmentService.deleteAppointment(uid);

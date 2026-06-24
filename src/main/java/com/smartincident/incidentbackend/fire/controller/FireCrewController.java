@@ -1,9 +1,9 @@
 package com.smartincident.incidentbackend.fire.controller;
 
 import com.smartincident.incidentbackend.authotp.security.Authenticated;
-import com.smartincident.incidentbackend.authotp.security.AuthorizedRole;
+import com.smartincident.incidentbackend.authotp.security.RequiresPermission;
 import com.smartincident.incidentbackend.enums.FireCrewStatus;
-import com.smartincident.incidentbackend.enums.Role;
+import com.smartincident.incidentbackend.enums.Permission;
 import com.smartincident.incidentbackend.fire.dto.FireCrewDto;
 import com.smartincident.incidentbackend.fire.entity.FireCrew;
 import com.smartincident.incidentbackend.fire.service.FireCrewService;
@@ -21,15 +21,14 @@ public class FireCrewController {
     private final FireCrewService crewService;
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @PostMapping
     public Response<FireCrew> saveCrew(@RequestBody FireCrewDto dto) {
         return crewService.saveCrew(dto);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT,
-                     Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping
     public ResponsePage<FireCrew> getCrews(
             @ModelAttribute PageableParam pageableParam,
@@ -39,15 +38,14 @@ public class FireCrewController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT,
-                     Role.DISPATCHER, Role.DISPATCHER_SUPERVISOR, Role.DISPATCH_CENTER_ADMIN})
+    @RequiresPermission(Permission.VIEW_RESPONDERS)
     @GetMapping("/{uid}")
     public Response<FireCrew> getCrew(@PathVariable String uid) {
         return crewService.getCrew(uid);
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @PatchMapping("/{uid}/status")
     public Response<FireCrew> updateStatus(
             @PathVariable String uid,
@@ -56,7 +54,7 @@ public class FireCrewController {
     }
 
     @Authenticated
-    @AuthorizedRole({Role.STATION_ADMIN, Role.AGENCY_ADMIN, Role.ROOT})
+    @RequiresPermission(Permission.MANAGE_STATIONS)
     @DeleteMapping("/{uid}")
     public Response<FireCrew> deleteCrew(@PathVariable String uid) {
         return crewService.deleteCrew(uid);
